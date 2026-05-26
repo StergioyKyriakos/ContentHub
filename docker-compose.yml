@@ -1,0 +1,19 @@
+﻿services:
+  contenthub-postgres:
+    image: postgres:16
+    container_name: contenthub-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: contenthub
+      POSTGRES_USER: contenthub
+      POSTGRES_PASSWORD: contenthub
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - contenthub_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  contenthub_postgres_data:
