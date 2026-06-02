@@ -53,7 +53,7 @@ Version 1.1 expands the v1 backend with stronger account flows, broader endpoint
 
 ## Solution Structure
 
-```text
+```
 ContentHub.Api/                  API host, endpoints, middleware, auth/Swagger setup
 ContentHub.Application/          Application abstractions and shared application concerns
 ContentHub.Contracts/            Shared contracts project
@@ -65,95 +65,9 @@ tests/ContentHub.IntegrationTests/ Integration/API tests with Testcontainers Pos
 tests/ContentHub.ArchitectureTests/ Architecture and dependency rule tests
 ```
 
-## Prerequisites
-
-- .NET 10 SDK
-- Docker Desktop, required for PostgreSQL and integration tests
-- PowerShell 7, optional but pinned in `dotnet-tools.json`
-
-## Getting Started
-
-Restore tools and packages:
-
-```powershell
-dotnet tool restore
-dotnet restore
-```
-
-Start PostgreSQL:
-
-```powershell
-docker compose up -d
-```
-
-Run the API:
-
-```powershell
-dotnet run --project ContentHub.Api
-```
-
-The development launch profile exposes:
-
-- HTTP: `http://localhost:5181`
-- HTTPS: `https://localhost:7027`
-
-Swagger is enabled in development.
-
-## Configuration
-
-Development configuration lives in:
-
-```text
-ContentHub.Api/appsettings.Development.json
-```
-
-Default development database connection:
-
-```text
-Host=localhost;Port=5432;Database=contenthub;Username=contenthub;Password=contenthub
-```
-
-Default seeded admin user:
-
-```text
-Email: admin@contenthub.local
-Username: admin
-Password: Admin123!
-```
-
-These values are development defaults only. Change secrets before deploying anywhere real.
-
-## Database
-
-The API applies EF Core migrations at startup and seeds baseline roles plus the development admin user.
-
-Create a new migration:
-
-```powershell
-dotnet ef migrations add MigrationName --project ContentHub.Data --startup-project ContentHub.Api --context ContentHubDbContext
-```
-
-Apply migrations manually:
-
-```powershell
-dotnet ef database update --project ContentHub.Data --startup-project ContentHub.Api --context ContentHubDbContext
-```
-
 ## Testing
 
-Run all tests:
-
-```powershell
-dotnet test
-```
-
-Run without restore:
-
-```powershell
-dotnet test --no-restore
-```
-
-Current v1.0 verification:
+v1.0 verification:
 
 ```text
 Total: 80
@@ -170,13 +84,20 @@ Breakdown:
 
 Integration tests require Docker because they use Testcontainers PostgreSQL.
 
-Current v1.1 local verification:
+v1.1 verification:
 
 ```text
-dotnet build --no-restore
-Unit tests: 43 passed
-Architecture tests: 22 passed
+Total: 103
+Passed: 103
+Failed: 0
+Skipped: 0
 ```
+
+Breakdown:
+
+- Unit tests: 43 passed
+- Architecture tests: 22 passed
+- Integration tests: 38 passed
 
 The v1.1 integration suite requires Docker Desktop/Testcontainers to be available.
 
