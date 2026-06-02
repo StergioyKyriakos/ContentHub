@@ -1,9 +1,11 @@
+using ContentHub.Api.Common.Auditing;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.Posts.Shared;
 using ContentHub.Application.Common.Security;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Entities.Common;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
@@ -25,6 +27,7 @@ public sealed class RemoveFeaturedPostEndpoint : IEndpointDefinition
         [FromBody] RemoveFeaturedPostCommand command,
         IValidator<RemoveFeaturedPostCommand> validator,
         ContentHubDbContext db,
+        AuditLogWriter auditLogWriter,
         CancellationToken ct)
     {
         var validationResult = await validator.ValidateAsync(command, ct);
@@ -40,7 +43,26 @@ public sealed class RemoveFeaturedPostEndpoint : IEndpointDefinition
             return Results.NotFound(ApiResponse<DomainError>.Fail(PostErrors.NotFound));
         }
 
+        var oldValues = new
+        {
+            post.Id,
+            post.IsFeatured,
+            post.FeaturedAtUtc
+        };
+
         post.RemoveFeatured();
+
+        auditLogWriter.Add(
+            action: AuditAction.PostUnfeatured,
+            entityName: "Post",
+            entityId: post.Id.ToString(),
+            oldValues: oldValues,
+            newValues: new
+            {
+                post.Id,
+                post.IsFeatured,
+                post.FeaturedAtUtc
+            });
 
         await db.SaveChangesAsync(ct);
 

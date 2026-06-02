@@ -27,6 +27,7 @@ public static class DependencyInjection
         
         services.AddScoped<RoleSeeder>();
         services.AddScoped<AdminUserSeeder>();
+        services.AddScoped<ContentSeeder>();
         services.AddScoped<DatabaseSeeder>();
 
         return services;

@@ -22,7 +22,7 @@ public sealed class SearchEverythingEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        SearchEverythingQuery query,
+        [FromBody] SearchEverythingQuery query,
         IValidator<SearchEverythingQuery> validator,
         HttpContext httpContext,
         ContentHubDbContext db,

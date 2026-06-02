@@ -1,22 +1,29 @@
+using System.Net.Http.Json;
 using ContentHub.Data.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Xunit.Abstractions;
 
 namespace ContentHub.IntegrationTests.Infrastructure;
 
 [Collection(IntegrationTestCollection.Name)]
 public abstract class IntegrationTestBase : IAsyncLifetime
 {
-    protected IntegrationTestBase(DatabaseFixture databaseFixture)
+    protected IntegrationTestBase(
+        DatabaseFixture databaseFixture,
+        ITestOutputHelper output)
     {
+        Output = output;
         Factory = new ContentHubApiFactory(databaseFixture);
         Client = Factory.CreateClient();
-        Auth = new AuthTestHelper(Client);
+        Auth = new AuthTestHelper(Client, output);
         Seeder = new TestDataSeeder(Factory);
-        Cms = new CmsTestHelper(Client);
+        Cms = new CmsTestHelper(Client, output);
     }
 
     protected ContentHubApiFactory Factory { get; }
+
+    protected ITestOutputHelper Output { get; }
 
     protected HttpClient Client { get; }
 
@@ -25,6 +32,29 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     protected TestDataSeeder Seeder { get; }
     
     protected CmsTestHelper Cms { get; }
+
+    protected async Task<string> LogResponseAsync(
+        HttpResponseMessage response,
+        string label)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+
+        Output.WriteLine(label);
+        Output.WriteLine($"Status: {(int)response.StatusCode} {response.StatusCode}");
+        Output.WriteLine(body);
+
+        return body;
+    }
+
+    protected Task<HttpResponseMessage> GetAsJsonAsync(string url, object body)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, url)
+        {
+            Content = JsonContent.Create(body)
+        };
+
+        return Client.SendAsync(request);
+    }
 
     public virtual async Task InitializeAsync()
     {
@@ -63,6 +93,8 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                                                      asset_versions,
                                                      authors,
                                                      categories,
+                                                     email_verification_tokens,
+                                                     password_reset_tokens,
                                                      refresh_tokens,
                                                      user_sessions,
                                                      user_roles,

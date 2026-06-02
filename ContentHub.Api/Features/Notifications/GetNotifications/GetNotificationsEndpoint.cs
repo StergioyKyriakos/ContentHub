@@ -2,10 +2,9 @@ using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.Notifications.Shared;
 using ContentHub.Application.Abstractions.Authentication;
 using ContentHub.Application.Common.Security;
-using ContentHub.Data.Entities.Notifications; // Assuming Notification entity resides here
+using ContentHub.Data.Entities.Notifications; 
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Dtos.Notifications;
-using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
@@ -24,7 +23,7 @@ public sealed class GetNotificationsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        GetNotificationsQuery query,
+        [FromBody] GetNotificationsQuery query,
         IValidator<GetNotificationsQuery> validator,
         ICurrentUserProvider currentUserProvider,
         ContentHubDbContext db,

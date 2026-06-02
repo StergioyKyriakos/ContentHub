@@ -19,7 +19,7 @@ public sealed class GetCategoriesEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        GetCategoriesQuery query,
+        [FromBody] GetCategoriesQuery query,
         ContentHubDbContext db,
         CancellationToken ct)
     {

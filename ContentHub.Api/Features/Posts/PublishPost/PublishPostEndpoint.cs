@@ -24,7 +24,7 @@ public sealed class PublishPostEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        [AsParameters] PublishPostCommand command,
+        [FromBody] PublishPostCommand command,
         ContentHubDbContext db,
         AuditLogWriter auditLogWriter,
         CancellationToken ct)

@@ -2,6 +2,20 @@
 
 ContentHub is a .NET 10 content management API. Version 1.0 establishes the backend foundation for managing categories, authors, posts, assets, audit logs, search, notifications, authentication, and authorization.
 
+## Version 1.1 Update
+
+Version 1.1 expands the v1 backend with stronger account flows, broader endpoint coverage, and more complete operational visibility.
+
+- Email verification flow with request and verify endpoints
+- Forgot password and reset password flow
+- Refresh token rotation and session/device management endpoints
+- Improved validator messages across feature commands and queries
+- Better seed data for local development and test scenarios
+- Consistent command/query request body usage across feature endpoints
+- Expanded integration test coverage for API feature endpoints
+- Wider audit logging for user registration, login, category updates/deletes, author updates/deletes, post archive/schedule/delete/unfeature, and asset attach/detach operations
+- Integration test response logging for easier API debugging in Rider and CLI test output
+
 ## Version 1.0 Scope
 
 - Solution skeleton with API, Application, Contracts, Data, Domain, Infrastructure, Unit Tests, Integration Tests, and Architecture Tests projects
@@ -156,6 +170,16 @@ Breakdown:
 
 Integration tests require Docker because they use Testcontainers PostgreSQL.
 
+Current v1.1 local verification:
+
+```text
+dotnet build --no-restore
+Unit tests: 43 passed
+Architecture tests: 22 passed
+```
+
+The v1.1 integration suite requires Docker Desktop/Testcontainers to be available.
+
 ## API Areas
 
 - `/api/auth/*`
@@ -166,10 +190,10 @@ Integration tests require Docker because they use Testcontainers PostgreSQL.
 - `/api/assets`
 - `/api/search`
 - `/api/notifications`
-- `/api/audit-logs`
+- `/api/admin/audit-logs`
 - `/health`, `/health/live`, `/health/ready`
 
-## Notes for v1.0
+## Notes for v1.0 and v1.1
 
 - Authorization is role-policy based in v1.0. Permission constants exist, but full permission-based policy enforcement is not yet part of the current baseline.
 - Asset storage is local filesystem storage under `storage/assets`.

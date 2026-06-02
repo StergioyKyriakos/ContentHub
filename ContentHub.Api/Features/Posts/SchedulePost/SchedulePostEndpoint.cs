@@ -1,3 +1,4 @@
+using ContentHub.Api.Common.Auditing;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Common.Filters;
 using ContentHub.Api.Features.Posts.Shared;
@@ -5,6 +6,7 @@ using ContentHub.Application.Common.Security;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Entities.Common;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +27,7 @@ public sealed class SchedulePostEndpoint : IEndpointDefinition
     private static async Task<IResult> Handle(
         [FromBody] SchedulePostCommand command,
         ContentHubDbContext db,
+        AuditLogWriter auditLogWriter,
         CancellationToken ct)
     {
         var post = await db.Posts.FirstOrDefaultAsync(p => p.Id == command.Id, ct);
@@ -34,7 +37,26 @@ public sealed class SchedulePostEndpoint : IEndpointDefinition
             return Results.NotFound(ApiResponse<DomainError>.Fail(PostErrors.NotFound));
         }
 
+        var oldValues = new
+        {
+            post.Id,
+            post.Status,
+            post.ScheduledForUtc
+        };
+
         post.Schedule(command.ScheduledForUtc);
+
+        auditLogWriter.Add(
+            action: AuditAction.PostScheduled,
+            entityName: "Post",
+            entityId: post.Id.ToString(),
+            oldValues: oldValues,
+            newValues: new
+            {
+                post.Id,
+                post.Status,
+                post.ScheduledForUtc
+            });
 
         await db.SaveChangesAsync(ct);
 

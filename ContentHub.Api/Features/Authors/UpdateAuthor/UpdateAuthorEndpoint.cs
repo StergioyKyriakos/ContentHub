@@ -1,3 +1,4 @@
+using ContentHub.Api.Common.Auditing;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Common.Filters;
 using ContentHub.Api.Features.Authors.Shared;
@@ -5,6 +6,7 @@ using ContentHub.Application.Common.Security;
 using ContentHub.Data.Dtos.Authors;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Entities.Common;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +28,7 @@ public sealed class UpdateAuthorEndpoint : IEndpointDefinition
         Guid id,
         [FromBody] UpdateAuthorCommand request,
         ContentHubDbContext db,
+        AuditLogWriter auditLogWriter,
         CancellationToken ct)
     {
         var author = await db.Authors
@@ -48,12 +51,37 @@ public sealed class UpdateAuthorEndpoint : IEndpointDefinition
             return Results.Conflict(ApiResponse<DomainError>.Fail(AuthorErrors.SlugAlreadyExists));
         }
 
+        var oldValues = new
+        {
+            author.Id,
+            author.DisplayName,
+            author.Slug,
+            author.Bio,
+            author.AvatarAssetId,
+            author.IsActive
+        };
+
         author.Update(
             displayName: request.DisplayName,
             slug: slug,
             bio: request.Bio,
             avatarAssetId: request.AvatarAssetId,
             isActive: request.IsActive);
+
+        auditLogWriter.Add(
+            action: AuditAction.AuthorUpdated,
+            entityName: "Author",
+            entityId: author.Id.ToString(),
+            oldValues: oldValues,
+            newValues: new
+            {
+                author.Id,
+                author.DisplayName,
+                author.Slug,
+                author.Bio,
+                author.AvatarAssetId,
+                author.IsActive
+            });
 
         await db.SaveChangesAsync(ct);
 

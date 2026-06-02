@@ -8,21 +8,32 @@ public sealed class RegisterValidator : AbstractValidator<RegisterCommand>
     {
         RuleFor(command => command.Email)
             .NotEmpty()
+            .WithMessage("Email is required.")
             .EmailAddress()
-            .MaximumLength(320);
+            .WithMessage("Email must be a valid email address.")
+            .MaximumLength(320)
+            .WithMessage("Email must be 320 characters or fewer.");
 
         RuleFor(command => command.Username)
             .NotEmpty()
+            .WithMessage("Username is required.")
             .MinimumLength(3)
-            .MaximumLength(100);
+            .WithMessage("Username must be at least 3 characters.")
+            .MaximumLength(100)
+            .WithMessage("Username must be 100 characters or fewer.");
 
         RuleFor(command => command.DisplayName)
             .NotEmpty()
-            .MaximumLength(150);
+            .WithMessage("Display name is required.")
+            .MaximumLength(150)
+            .WithMessage("Display name must be 150 characters or fewer.");
 
         RuleFor(command => command.Password)
             .NotEmpty()
+            .WithMessage("Password is required.")
             .MinimumLength(8)
-            .MaximumLength(100);
+            .WithMessage("Password must be at least 8 characters.")
+            .MaximumLength(100)
+            .WithMessage("Password must be 100 characters or fewer.");
     }
 }

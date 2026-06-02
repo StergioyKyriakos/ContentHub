@@ -24,5 +24,7 @@ public enum AuditAction
     PostUnfeatured = 308,
 
     AssetUploaded = 400,
-    AssetDeleted = 401
+    AssetDeleted = 401,
+    AssetAttachedToPost = 402,
+    AssetDetachedFromPost = 403
 }

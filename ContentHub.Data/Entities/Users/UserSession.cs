@@ -39,6 +39,18 @@ public sealed class UserSession : Entity
     {
         RevokedAtUtc = DateTime.UtcNow;
     }
+
+    public void RotateRefreshToken(
+        string refreshTokenHash,
+        DateTime expiresAtUtc,
+        string? userAgent,
+        string? ipAddress)
+    {
+        RefreshTokenHash = refreshTokenHash;
+        ExpiresAtUtc = expiresAtUtc;
+        UserAgent = userAgent;
+        IpAddress = ipAddress;
+    }
 }
 
 public sealed class UserSessionConfiguration : IEntityTypeConfiguration<UserSession>

@@ -1,3 +1,4 @@
+using ContentHub.Api.Common.Auditing;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Common.Filters;
 using ContentHub.Api.Features.Auth.Shared;
@@ -5,6 +6,7 @@ using ContentHub.Application.Abstractions.Authentication;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Entities.Users;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +28,10 @@ public sealed class RegisterEndpoint : IEndpointDefinition
         [FromBody] RegisterCommand request,
         ContentHubDbContext db,
         IPasswordHasher passwordHasher,
+        ISecurityTokenGenerator securityTokenGenerator,
+        IAuthEmailSender authEmailSender,
+        AuditLogWriter auditLogWriter,
+        HttpContext httpContext,
         CancellationToken ct)
     {
         var normalizedEmail = request.Email.ToUpperInvariant();
@@ -58,7 +64,30 @@ public sealed class RegisterEndpoint : IEndpointDefinition
         
         db.Users.Add(user);
 
+        var verificationToken = securityTokenGenerator.Generate();
+
+        user.AddEmailVerificationToken(
+            tokenHash: securityTokenGenerator.Hash(verificationToken),
+            expiresAtUtc: DateTime.UtcNow.AddHours(24),
+            userAgent: httpContext.Request.Headers.UserAgent.ToString(),
+            ipAddress: httpContext.Connection.RemoteIpAddress?.ToString());
+
+        auditLogWriter.AddAnonymous(
+            action: AuditAction.UserRegistered,
+            entityName: "User",
+            entityId: user.Id.ToString(),
+            newValues: new
+            {
+                user.Id,
+                user.Email,
+                user.Username,
+                user.DisplayName,
+                user.EmailVerified,
+                user.Status
+            });
+
         await db.SaveChangesAsync(ct);
+        await authEmailSender.SendEmailVerificationAsync(user, verificationToken, ct);
 
         var response = new RegisterResponse
         {

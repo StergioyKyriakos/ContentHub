@@ -1,16 +1,21 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using FluentAssertions;
+using Xunit.Abstractions;
 
 namespace ContentHub.IntegrationTests.Infrastructure;
 
 public sealed class AuthTestHelper
 {
     private readonly HttpClient _client;
+    private readonly ITestOutputHelper _output;
 
-    public AuthTestHelper(HttpClient client)
+    public AuthTestHelper(
+        HttpClient client,
+        ITestOutputHelper output)
     {
         _client = client;
+        _output = output;
     }
 
     public async Task<string> RegisterAndLoginAsync(
@@ -22,8 +27,11 @@ public sealed class AuthTestHelper
         {
             email,
             username,
+            displayName = username,
             password
         });
+
+        await LogResponseAsync(registerResponse, "POST /api/auth/register response:");
 
         if (!registerResponse.IsSuccessStatusCode)
         {
@@ -38,11 +46,22 @@ public sealed class AuthTestHelper
         string emailOrUsername,
         string password = TestConstants.DefaultPassword)
     {
+        var data = await LoginWithRefreshAsync(emailOrUsername, password);
+
+        return data.AccessToken;
+    }
+
+    public async Task<LoginData> LoginWithRefreshAsync(
+        string emailOrUsername,
+        string password = TestConstants.DefaultPassword)
+    {
         var response = await _client.PostAsJsonAsync("/api/auth/login", new
         {
             emailOrUsername,
             password
         });
+
+        await LogResponseAsync(response, "POST /api/auth/login response:");
 
         response.EnsureSuccessStatusCode();
 
@@ -53,7 +72,7 @@ public sealed class AuthTestHelper
         body.Data.Should().NotBeNull();
         body.Data!.AccessToken.Should().NotBeNullOrWhiteSpace();
 
-        return body.Data.AccessToken;
+        return body.Data;
     }
 
     public void UseBearerToken(string token)
@@ -67,7 +86,20 @@ public sealed class AuthTestHelper
         _client.DefaultRequestHeaders.Authorization = null;
     }
 
-    private sealed class LoginData
+    private async Task<string> LogResponseAsync(
+        HttpResponseMessage response,
+        string label)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+
+        _output.WriteLine(label);
+        _output.WriteLine($"Status: {(int)response.StatusCode} {response.StatusCode}");
+        _output.WriteLine(body);
+
+        return body;
+    }
+
+    public sealed class LoginData
     {
         public string AccessToken { get; set; } = null!;
 

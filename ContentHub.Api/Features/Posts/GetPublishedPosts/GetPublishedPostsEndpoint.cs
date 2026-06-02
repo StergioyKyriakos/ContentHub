@@ -22,7 +22,7 @@ public sealed class GetPublishedPostsEndpoint : IEndpointDefinition
     }
 
    private static async Task<IResult> Handle(
-        [AsParameters] GetPublishedPostsQuery query,
+        [FromBody] GetPublishedPostsQuery query,
         IValidator<GetPublishedPostsQuery> validator,
         ContentHubDbContext db, 
         CancellationToken ct)

@@ -23,7 +23,7 @@ public sealed class GetAuditLogByIdEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        [AsParameters] GetAuditLogByIdQuery query,
+        [FromBody] GetAuditLogByIdQuery query,
         IValidator<GetAuditLogByIdQuery> validator,
         ContentHubDbContext db,
         CancellationToken ct)

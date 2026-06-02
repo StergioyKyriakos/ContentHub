@@ -19,7 +19,7 @@ public sealed class GetAuthorsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        GetAuthorsQuery query,
+        [FromBody] GetAuthorsQuery query,
         ContentHubDbContext db,
         CancellationToken ct)
     {

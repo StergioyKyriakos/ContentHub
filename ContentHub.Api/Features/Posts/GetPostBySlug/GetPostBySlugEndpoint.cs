@@ -5,6 +5,8 @@ using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
+using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ContentHub.Api.Features.Posts.GetPostBySlug;
@@ -20,15 +22,22 @@ public sealed class GetPostBySlugEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        string slug,
+        [FromBody] GetPostBySlugQuery query,
+        IValidator<GetPostBySlugQuery> validator,
         ContentHubDbContext db,
         CancellationToken ct)
     {
+        var validationResult = await validator.ValidateAsync(query, ct);
+        if (!validationResult.IsValid)
+        {
+            return Results.ValidationProblem(validationResult.ToDictionary());
+        }
+
         var post = await db.Posts
             .AsNoTracking()
             .Include(post => post.Tags)
             .Where(post => post.Status == PostStatus.Published)
-            .FirstOrDefaultAsync(post => post.Slug == slug, ct);
+            .FirstOrDefaultAsync(post => post.Slug == query.Slug, ct);
 
         if (post is null)
         {

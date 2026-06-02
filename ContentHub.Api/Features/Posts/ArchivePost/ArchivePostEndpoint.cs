@@ -1,9 +1,11 @@
+using ContentHub.Api.Common.Auditing;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.Posts.Shared;
 using ContentHub.Application.Common.Security;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Entities.Common;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +22,11 @@ public sealed class ArchivePostEndpoint : IEndpointDefinition
             .RequireAuthorization(Policies.EditorOrAdmin);
     }
 
-    private static async Task<IResult> Handle([FromBody] ArchivePostCommand command, ContentHubDbContext db, CancellationToken ct)
+    private static async Task<IResult> Handle(
+        [FromBody] ArchivePostCommand command,
+        ContentHubDbContext db,
+        AuditLogWriter auditLogWriter,
+        CancellationToken ct)
     {
         var post = await db.Posts.FirstOrDefaultAsync(post => post.Id == command.Id, ct);
 
@@ -29,7 +35,31 @@ public sealed class ArchivePostEndpoint : IEndpointDefinition
             return Results.NotFound(ApiResponse<DomainError>.Fail(PostErrors.NotFound));
         }
 
+        var oldValues = new
+        {
+            post.Id,
+            post.Status,
+            post.PublishedAtUtc,
+            post.IsFeatured,
+            post.FeaturedAtUtc
+        };
+
         post.Archive();
+
+        auditLogWriter.Add(
+            action: AuditAction.PostArchived,
+            entityName: "Post",
+            entityId: post.Id.ToString(),
+            oldValues: oldValues,
+            newValues: new
+            {
+                post.Id,
+                post.Status,
+                post.PublishedAtUtc,
+                post.IsFeatured,
+                post.FeaturedAtUtc
+            });
+
         await db.SaveChangesAsync(ct);
         
         var response = new ArchivePostResponse

@@ -1,8 +1,10 @@
+using ContentHub.Api.Common.Auditing;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.Authors.Shared;
 using ContentHub.Application.Common.Security;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Entities.Common;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,6 +23,7 @@ public sealed class DeleteAuthorEndpoint : IEndpointDefinition
     private static async Task<IResult> Handle(
         Guid id,
         ContentHubDbContext db,
+        AuditLogWriter auditLogWriter,
         CancellationToken ct)
     {
         var author = await db.Authors
@@ -31,7 +34,29 @@ public sealed class DeleteAuthorEndpoint : IEndpointDefinition
             return Results.NotFound(ApiResponse<DomainError>.Fail(AuthorErrors.NotFound));
         }
 
+        var oldValues = new
+        {
+            author.Id,
+            author.DisplayName,
+            author.Slug,
+            author.Bio,
+            author.AvatarAssetId,
+            author.IsActive
+        };
+
         author.MarkAsDeleted();
+
+        auditLogWriter.Add(
+            action: AuditAction.AuthorDeleted,
+            entityName: "Author",
+            entityId: author.Id.ToString(),
+            oldValues: oldValues,
+            newValues: new
+            {
+                author.Id,
+                author.IsDeleted,
+                author.DeletedAtUtc
+            });
 
         await db.SaveChangesAsync(ct);
 

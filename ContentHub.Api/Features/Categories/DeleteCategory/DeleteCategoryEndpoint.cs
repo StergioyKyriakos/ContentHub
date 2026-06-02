@@ -1,8 +1,10 @@
+using ContentHub.Api.Common.Auditing;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.Categories.Shared;
 using ContentHub.Application.Common.Security;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Entities.Common;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,6 +23,7 @@ public sealed class DeleteCategoryEndpoint : IEndpointDefinition
     private static async Task<IResult> Handle(
         Guid id,
         ContentHubDbContext db,
+        AuditLogWriter auditLogWriter,
         CancellationToken ct)
     {
         var category = await db.Categories
@@ -31,7 +34,30 @@ public sealed class DeleteCategoryEndpoint : IEndpointDefinition
             return Results.NotFound(ApiResponse<DomainError>.Fail(CategoryErrors.NotFound));
         }
 
+        var oldValues = new
+        {
+            category.Id,
+            category.Name,
+            category.Slug,
+            category.Description,
+            category.ParentCategoryId,
+            category.DisplayOrder,
+            category.IsVisible
+        };
+
         category.MarkAsDeleted();
+
+        auditLogWriter.Add(
+            action: AuditAction.CategoryDeleted,
+            entityName: "Category",
+            entityId: category.Id.ToString(),
+            oldValues: oldValues,
+            newValues: new
+            {
+                category.Id,
+                category.IsDeleted,
+                category.DeletedAtUtc
+            });
 
         await db.SaveChangesAsync(ct);
 

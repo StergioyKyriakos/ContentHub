@@ -17,7 +17,10 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
         _options = options.Value;
     }
 
-    public string Generate(User user, IReadOnlyCollection<string> roles)
+    public string Generate(
+        User user,
+        IReadOnlyCollection<string> roles,
+        Guid? sessionId = null)
     {
         var claims = new List<Claim>
         {
@@ -28,6 +31,11 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
             new(ClaimTypes.Email, user.Email),
             new("userId", user.Id.ToString())
         };
+
+        if (sessionId.HasValue)
+        {
+            claims.Add(new Claim("sessionId", sessionId.Value.ToString()));
+        }
 
         foreach (var role in roles)
         {

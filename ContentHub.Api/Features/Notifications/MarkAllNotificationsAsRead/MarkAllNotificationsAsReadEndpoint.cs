@@ -6,7 +6,6 @@ using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ContentHub.Api.Features.Notifications.MarkAllNotificationsAsRead;

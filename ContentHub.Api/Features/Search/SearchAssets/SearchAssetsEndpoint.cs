@@ -5,7 +5,6 @@ using ContentHub.Application.Common.Security;
 using ContentHub.Data.Entities.Assets;
 using ContentHub.Data.Dtos.Assets;
 using ContentHub.Data.Dtos.Common;
-using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
@@ -24,7 +23,7 @@ public sealed class SearchAssetsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        SearchAssetsQuery query,
+        [FromBody] SearchAssetsQuery query,
         IValidator<SearchAssetsQuery> validator,
         ContentHubDbContext db,
         IFileUrlResolver fileUrlResolver,

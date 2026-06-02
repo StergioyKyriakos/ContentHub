@@ -56,20 +56,45 @@ public sealed class RefreshTokenEndpoint : IEndpointDefinition
                 statusCode: StatusCodes.Status403Forbidden);
         }
 
-        existingRefreshToken.Revoke();
-
         var newRefreshToken = refreshTokenGenerator.Generate();
         var newRefreshTokenHash = refreshTokenGenerator.Hash(newRefreshToken);
+        var newRefreshTokenExpiresAtUtc = DateTime.UtcNow.AddDays(jwtOptions.Value.RefreshTokenExpirationDays);
+
+        existingRefreshToken.Revoke(newRefreshTokenHash);
 
         user.AddRefreshToken(
             tokenHash: newRefreshTokenHash,
-            expiresAtUtc: DateTime.UtcNow.AddDays(jwtOptions.Value.RefreshTokenExpirationDays),
+            expiresAtUtc: newRefreshTokenExpiresAtUtc,
             userAgent: httpContext.Request.Headers.UserAgent.ToString(),
             ipAddress: httpContext.Connection.RemoteIpAddress?.ToString());
 
+        var session = await db.UserSessions
+            .FirstOrDefaultAsync(session =>
+                session.UserId == user.Id &&
+                session.RefreshTokenHash == refreshTokenHash &&
+                session.RevokedAtUtc == null,
+                ct);
+
+        if (session is null)
+        {
+            session = user.AddSession(
+                refreshTokenHash: newRefreshTokenHash,
+                expiresAtUtc: newRefreshTokenExpiresAtUtc,
+                userAgent: httpContext.Request.Headers.UserAgent.ToString(),
+                ipAddress: httpContext.Connection.RemoteIpAddress?.ToString());
+        }
+        else
+        {
+            session.RotateRefreshToken(
+                refreshTokenHash: newRefreshTokenHash,
+                expiresAtUtc: newRefreshTokenExpiresAtUtc,
+                userAgent: httpContext.Request.Headers.UserAgent.ToString(),
+                ipAddress: httpContext.Connection.RemoteIpAddress?.ToString());
+        }
+
         var roles = await permissionService.GetRolesAsync(user.Id, ct);
 
-        var accessToken = jwtTokenGenerator.Generate(user, roles);
+        var accessToken = jwtTokenGenerator.Generate(user, roles, session.Id);
 
         await db.SaveChangesAsync(ct);
 

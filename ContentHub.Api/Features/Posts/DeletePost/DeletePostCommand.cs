@@ -1,6 +1,6 @@
 namespace ContentHub.Api.Features.Posts.DeletePost;
 
-public class DeletePostCommand
+public sealed class DeletePostCommand
 {
-    public Guid id { get; set; }
+    public Guid Id { get; set; }
 }

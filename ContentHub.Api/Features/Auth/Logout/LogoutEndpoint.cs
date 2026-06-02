@@ -4,7 +4,6 @@ using ContentHub.Api.Features.Auth.Shared;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Persistence;
 using ContentHub.Application.Abstractions.Authentication;
-using ContentHub.Data.Entities.Common;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -35,6 +34,15 @@ public sealed class LogoutEndpoint : IEndpointDefinition
         if (refreshToken is not null && refreshToken.IsActive)
         {
             refreshToken.Revoke();
+
+            var session = await db.UserSessions
+                .FirstOrDefaultAsync(session =>
+                    session.RefreshTokenHash == refreshTokenHash &&
+                    session.RevokedAtUtc == null,
+                    ct);
+
+            session?.Revoke();
+
             await db.SaveChangesAsync(ct);
         }
         

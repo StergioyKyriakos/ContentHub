@@ -4,6 +4,8 @@ using ContentHub.Data.Dtos.Authors;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Persistence;
+using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ContentHub.Api.Features.Authors.GetAuthorById;
@@ -19,14 +21,21 @@ public sealed class GetAuthorByIdEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        Guid id,
+        [FromBody] GetAuthorByIdQuery query,
+        IValidator<GetAuthorByIdQuery> validator,
         ContentHubDbContext db,
         CancellationToken ct)
     {
+        var validationResult = await validator.ValidateAsync(query, ct);
+        if (!validationResult.IsValid)
+        {
+            return Results.ValidationProblem(validationResult.ToDictionary());
+        }
+
         var author = await db.Authors
             .AsNoTracking()
             .Where(author => author.IsActive)
-            .FirstOrDefaultAsync(author => author.Id == id, ct);
+            .FirstOrDefaultAsync(author => author.Id == query.Id, ct);
 
         if (author is null)
         {

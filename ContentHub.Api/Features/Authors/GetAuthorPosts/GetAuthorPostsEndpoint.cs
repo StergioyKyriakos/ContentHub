@@ -3,6 +3,8 @@ using ContentHub.Api.Features.Authors.Shared;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Persistence;
+using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ContentHub.Api.Features.Authors.GetAuthorPosts;
@@ -18,13 +20,20 @@ public sealed class GetAuthorPostsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        Guid id,
+        [FromBody] GetAuthorPostsQuery query,
+        IValidator<GetAuthorPostsQuery> validator,
         ContentHubDbContext db,
         CancellationToken ct)
     {
+        var validationResult = await validator.ValidateAsync(query, ct);
+        if (!validationResult.IsValid)
+        {
+            return Results.ValidationProblem(validationResult.ToDictionary());
+        }
+
         var authorExists = await db.Authors
             .AsNoTracking()
-            .AnyAsync(author => author.Id == id && author.IsActive, ct);
+            .AnyAsync(author => author.Id == query.Id && author.IsActive, ct);
 
         if (!authorExists)
         {
@@ -33,7 +42,7 @@ public sealed class GetAuthorPostsEndpoint : IEndpointDefinition
 
         var response = new GetAuthorPostsResponse
         {
-            AuthorId = id,
+            AuthorId = query.Id,
             Posts = []
         };
 

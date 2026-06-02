@@ -1,16 +1,21 @@
 using System.Net.Http.Json;
 using Bogus;
+using Xunit.Abstractions;
 
 namespace ContentHub.IntegrationTests.Infrastructure;
 
 public sealed class CmsTestHelper
 {
     private readonly HttpClient _client;
+    private readonly ITestOutputHelper _output;
     private readonly Faker _faker = new();
 
-    public CmsTestHelper(HttpClient client)
+    public CmsTestHelper(
+        HttpClient client,
+        ITestOutputHelper output)
     {
         _client = client;
+        _output = output;
     }
 
     public async Task<Guid> CreateCategoryAsync()
@@ -29,6 +34,8 @@ public sealed class CmsTestHelper
         });
 
         response.EnsureSuccessStatusCode();
+
+        await LogResponseAsync(response, "POST /api/categories response:");
 
         var body = await response.Content.ReadFromJsonAsync<TestApiResponse<CreateCategoryData>>();
 
@@ -52,6 +59,8 @@ public sealed class CmsTestHelper
         });
 
         response.EnsureSuccessStatusCode();
+
+        await LogResponseAsync(response, "POST /api/authors response:");
 
         var body = await response.Content.ReadFromJsonAsync<TestApiResponse<CreateAuthorData>>();
 
@@ -80,6 +89,8 @@ public sealed class CmsTestHelper
 
         response.EnsureSuccessStatusCode();
 
+        await LogResponseAsync(response, "POST /api/posts response:");
+
         var body = await response.Content.ReadFromJsonAsync<TestApiResponse<CreatePostData>>();
 
         return (body!.Data!.Post.Id, slug);
@@ -89,11 +100,29 @@ public sealed class CmsTestHelper
     {
         var post = await CreateDraftPostAsync();
 
-        var publishResponse = await _client.PostAsync($"/api/posts/{post.Id}/publish", null);
+        var publishResponse = await _client.PostAsJsonAsync($"/api/posts/{post.Id}/publish", new
+        {
+            id = post.Id
+        });
 
         publishResponse.EnsureSuccessStatusCode();
 
+        await LogResponseAsync(publishResponse, $"POST /api/posts/{post.Id}/publish response:");
+
         return post;
+    }
+
+    private async Task<string> LogResponseAsync(
+        HttpResponseMessage response,
+        string label)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+
+        _output.WriteLine(label);
+        _output.WriteLine($"Status: {(int)response.StatusCode} {response.StatusCode}");
+        _output.WriteLine(body);
+
+        return body;
     }
 
     private sealed class CreateCategoryData

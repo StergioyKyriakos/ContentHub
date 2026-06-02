@@ -23,7 +23,7 @@ public sealed class GetAssetByIdEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        [AsParameters] GetAssetByIdQuery query,
+        [FromBody] GetAssetByIdQuery query,
         IValidator<GetAssetByIdQuery> validator,
         ContentHubDbContext db,
         IFileUrlResolver fileUrlResolver,

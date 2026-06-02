@@ -7,6 +7,7 @@ public class DeleteCategoryValidator : AbstractValidator<DeleteCategoryCommand>
     public DeleteCategoryValidator()
     {
         RuleFor(command => command.Id)
-            .NotEmpty();
+            .NotEmpty()
+            .WithMessage("Category id is required.");
     }
 }

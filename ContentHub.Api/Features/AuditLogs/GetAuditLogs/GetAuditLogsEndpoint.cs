@@ -3,7 +3,6 @@ using ContentHub.Api.Features.AuditLogs.Shared;
 using ContentHub.Application.Common.Security;
 using ContentHub.Data.Dtos.AuditLogs;
 using ContentHub.Data.Dtos.Common;
-using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -21,7 +20,7 @@ public sealed class GetAuditLogsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        GetAuditLogsQuery query,
+        [FromBody] GetAuditLogsQuery query,
         ContentHubDbContext db,
         CancellationToken ct)
     {

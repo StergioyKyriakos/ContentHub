@@ -21,7 +21,7 @@ public sealed class GetAssetsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        [AsParameters] GetAssetsQuery query,
+        [FromBody] GetAssetsQuery query,
         ContentHubDbContext db,
         IFileUrlResolver fileUrlResolver,
         CancellationToken ct)

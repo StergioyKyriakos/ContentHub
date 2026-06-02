@@ -1,10 +1,13 @@
+using ContentHub.Api.Common.Auditing;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.Assets.Shared;
 using ContentHub.Application.Common.Security;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Entities.Common;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ContentHub.Api.Features.Assets.AttachAssetToPost;
@@ -20,9 +23,10 @@ public sealed class AttachAssetToPostEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        [AsParameters] AttachAssetToPostCommand command,
+        [FromBody] AttachAssetToPostCommand command,
         IValidator<AttachAssetToPostCommand> validator,
         ContentHubDbContext db,
+        AuditLogWriter auditLogWriter,
         CancellationToken ct)
     {
         var validationResult = await validator.ValidateAsync(command, ct);
@@ -56,6 +60,17 @@ public sealed class AttachAssetToPostEndpoint : IEndpointDefinition
         var displayOrder = post.Assets.Count;
 
         post.AttachAsset(command.AssetId, displayOrder);
+
+        auditLogWriter.Add(
+            action: AuditAction.AssetAttachedToPost,
+            entityName: "PostAsset",
+            entityId: $"{command.PostId}:{command.AssetId}",
+            newValues: new
+            {
+                command.PostId,
+                command.AssetId,
+                DisplayOrder = displayOrder
+            });
 
         await db.SaveChangesAsync(ct);
 

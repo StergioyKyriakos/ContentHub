@@ -21,7 +21,7 @@ public sealed class GetPostsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        [AsParameters] GetPostsQuery query,
+        [FromBody] GetPostsQuery query,
         ContentHubDbContext db,
         CancellationToken ct)
     {

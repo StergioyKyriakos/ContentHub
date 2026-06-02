@@ -1,7 +1,6 @@
 using ContentHub.Data.Entities.Common;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ContentHub.ArchitectureTests;
 

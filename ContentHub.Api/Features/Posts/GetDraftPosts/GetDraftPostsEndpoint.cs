@@ -24,7 +24,7 @@ public sealed class GetDraftPostsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        [AsParameters] GetDraftPostsQuery query,
+        [FromBody] GetDraftPostsQuery query,
         IValidator<GetDraftPostsQuery> validator,
         HttpContext httpContext,
         ICurrentUserProvider currentUserProvider,

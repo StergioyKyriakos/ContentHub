@@ -24,6 +24,16 @@ public static class AuthErrors
             code: "auth.invalid_refresh_token",
             message: "Invalid refresh token.");
 
+    public static ApiError InvalidEmailVerificationToken =>
+        ApiError.Create(
+            code: "auth.invalid_email_verification_token",
+            message: "Invalid or expired email verification token.");
+
+    public static ApiError InvalidPasswordResetToken =>
+        ApiError.Create(
+            code: "auth.invalid_password_reset_token",
+            message: "Invalid or expired password reset token.");
+
     public static ApiError UserNotFound =>
         ApiError.Create(
             code: "auth.user_not_found",
@@ -33,4 +43,9 @@ public static class AuthErrors
         ApiError.Create(
             code: "auth.user_disabled",
             message: "This user account is disabled.");
+
+    public static ApiError SessionNotFound =>
+        ApiError.Create(
+            code: "auth.session_not_found",
+            message: "Session was not found.");
 }

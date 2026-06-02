@@ -7,6 +7,7 @@ public sealed class DeleteAuthorValidator : AbstractValidator<DeleteAuthorComman
     public DeleteAuthorValidator()
     {
         RuleFor(command => command.Id)
-            .NotEmpty();
+            .NotEmpty()
+            .WithMessage("Author id is required.");
     }
 }

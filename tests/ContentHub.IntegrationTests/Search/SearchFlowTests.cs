@@ -1,20 +1,28 @@
 using System.Net;
 using FluentAssertions;
 using ContentHub.IntegrationTests.Infrastructure;
+using Xunit.Abstractions;
 
 namespace ContentHub.IntegrationTests.Search;
 
 public sealed class SearchFlowTests : IntegrationTestBase
 {
-    public SearchFlowTests(DatabaseFixture databaseFixture)
-        : base(databaseFixture)
+    public SearchFlowTests(
+        DatabaseFixture databaseFixture,
+        ITestOutputHelper output)
+        : base(databaseFixture, output)
     {
     }
 
     [Fact]
     public async Task Public_SearchPosts_Should_Work()
     {
-        var response = await Client.GetAsync("/api/search/posts?q=test");
+        var response = await GetAsJsonAsync("/api/search/posts", new
+        {
+            q = "test"
+        });
+
+        await LogResponseAsync(response, "GET /api/search/posts?q=test response:");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -25,7 +33,12 @@ public sealed class SearchFlowTests : IntegrationTestBase
         var token = await Auth.LoginAsync(TestConstants.AdminEmail);
         Auth.UseBearerToken(token);
 
-        var response = await Client.GetAsync("/api/search/assets?q=test");
+        var response = await GetAsJsonAsync("/api/search/assets", new
+        {
+            q = "test"
+        });
+
+        await LogResponseAsync(response, "GET /api/search/assets?q=test response:");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -33,12 +46,16 @@ public sealed class SearchFlowTests : IntegrationTestBase
     [Fact]
     public async Task SearchEverything_Should_Work()
     {
-        var response = await Client.GetAsync("/api/search?q=test");
+        var response = await GetAsJsonAsync("/api/search", new
+        {
+            q = "test"
+        });
+
+        var body = await LogResponseAsync(response, "GET /api/search?q=test response:");
 
         if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
         {
-            var errorContent = await response.Content.ReadAsStringAsync();
-            throw new Xunit.Sdk.XunitException($"API rejected request with: {errorContent}");
+            throw new Xunit.Sdk.XunitException($"API rejected request with: {body}");
         }
         
         response.StatusCode.Should().Be(HttpStatusCode.OK);

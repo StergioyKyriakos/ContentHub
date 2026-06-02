@@ -18,7 +18,7 @@ public sealed class ExportAuditLogsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        [AsParameters] ExportAuditLogsCommand query,
+        [FromBody] ExportAuditLogsCommand query,
         ContentHubDbContext db,
         CancellationToken ct)
     {

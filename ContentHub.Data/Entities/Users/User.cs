@@ -11,6 +11,8 @@ public sealed class User : AggregateRoot
     private readonly List<UserRole> _userRoles = [];
     private readonly List<RefreshToken> _refreshTokens = [];
     private readonly List<UserSession> _sessions = [];
+    private readonly List<EmailVerificationToken> _emailVerificationTokens = [];
+    private readonly List<PasswordResetToken> _passwordResetTokens = [];
 
     public User()
     {
@@ -56,6 +58,10 @@ public sealed class User : AggregateRoot
 
     public IReadOnlyCollection<UserSession> Sessions => _sessions.AsReadOnly();
 
+    public IReadOnlyCollection<EmailVerificationToken> EmailVerificationTokens => _emailVerificationTokens.AsReadOnly();
+
+    public IReadOnlyCollection<PasswordResetToken> PasswordResetTokens => _passwordResetTokens.AsReadOnly();
+
     public bool IsActive => Status == UserStatus.Active;
 
     public void MarkEmailAsVerified()
@@ -67,6 +73,12 @@ public sealed class User : AggregateRoot
     public void MarkLoggedIn()
     {
         LastLoginAtUtc = DateTime.UtcNow;
+        MarkAsUpdated();
+    }
+
+    public void ChangePasswordHash(string passwordHash)
+    {
+        PasswordHash = passwordHash;
         MarkAsUpdated();
     }
 
@@ -125,6 +137,42 @@ public sealed class User : AggregateRoot
         _sessions.Add(session);
 
         return session;
+    }
+
+    public EmailVerificationToken AddEmailVerificationToken(
+        string tokenHash,
+        DateTime expiresAtUtc,
+        string? userAgent,
+        string? ipAddress)
+    {
+        var token = new EmailVerificationToken(
+            userId: Id,
+            tokenHash: tokenHash,
+            expiresAtUtc: expiresAtUtc,
+            userAgent: userAgent,
+            ipAddress: ipAddress);
+
+        _emailVerificationTokens.Add(token);
+
+        return token;
+    }
+
+    public PasswordResetToken AddPasswordResetToken(
+        string tokenHash,
+        DateTime expiresAtUtc,
+        string? userAgent,
+        string? ipAddress)
+    {
+        var token = new PasswordResetToken(
+            userId: Id,
+            tokenHash: tokenHash,
+            expiresAtUtc: expiresAtUtc,
+            userAgent: userAgent,
+            ipAddress: ipAddress);
+
+        _passwordResetTokens.Add(token);
+
+        return token;
     }
 }
 
@@ -197,6 +245,16 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasMany(user => user.Sessions)
             .WithOne(session => session.User)
             .HasForeignKey(session => session.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(user => user.EmailVerificationTokens)
+            .WithOne(token => token.User)
+            .HasForeignKey(token => token.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(user => user.PasswordResetTokens)
+            .WithOne(token => token.User)
+            .HasForeignKey(token => token.UserId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

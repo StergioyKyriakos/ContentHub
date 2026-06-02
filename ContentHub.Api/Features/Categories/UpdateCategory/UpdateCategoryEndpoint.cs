@@ -1,3 +1,4 @@
+using ContentHub.Api.Common.Auditing;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Common.Filters;
 using ContentHub.Api.Features.Categories.Shared;
@@ -5,6 +6,7 @@ using ContentHub.Application.Common.Security;
 using ContentHub.Data.Dtos.Categories;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Entities.Common;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +28,7 @@ public sealed class UpdateCategoryEndpoint : IEndpointDefinition
         Guid id,
         [FromBody] UpdateCategoryCommand request,
         ContentHubDbContext db,
+        AuditLogWriter auditLogWriter,
         CancellationToken ct)
     {
         var category = await db.Categories
@@ -69,6 +72,17 @@ public sealed class UpdateCategoryEndpoint : IEndpointDefinition
             return Results.Conflict(ApiResponse<DomainError>.Fail(CategoryErrors.SlugAlreadyExists));
         }
 
+        var oldValues = new
+        {
+            category.Id,
+            category.Name,
+            category.Slug,
+            category.Description,
+            category.ParentCategoryId,
+            category.DisplayOrder,
+            category.IsVisible
+        };
+
         category.Update(
             name: request.Name,
             slug: slug,
@@ -76,6 +90,22 @@ public sealed class UpdateCategoryEndpoint : IEndpointDefinition
             parentCategoryId: request.ParentCategoryId,
             displayOrder: request.DisplayOrder,
             isVisible: request.IsVisible);
+
+        auditLogWriter.Add(
+            action: AuditAction.CategoryUpdated,
+            entityName: "Category",
+            entityId: category.Id.ToString(),
+            oldValues: oldValues,
+            newValues: new
+            {
+                category.Id,
+                category.Name,
+                category.Slug,
+                category.Description,
+                category.ParentCategoryId,
+                category.DisplayOrder,
+                category.IsVisible
+            });
 
         await db.SaveChangesAsync(ct);
 

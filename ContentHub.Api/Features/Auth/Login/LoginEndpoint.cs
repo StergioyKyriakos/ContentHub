@@ -1,8 +1,10 @@
+using ContentHub.Api.Common.Auditing;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Common.Filters;
 using ContentHub.Api.Features.Auth.Shared;
 using ContentHub.Application.Abstractions.Authentication;
 using ContentHub.Data.Dtos.Common;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using ContentHub.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Mvc;
@@ -30,6 +32,7 @@ public sealed class LoginEndpoint : IEndpointDefinition
         IRefreshTokenGenerator refreshTokenGenerator,
         IOptions<JwtOptions> jwtOptions,
         IPermissionService permissionService,
+        AuditLogWriter auditLogWriter,
         HttpContext httpContext,
 
         CancellationToken ct)
@@ -84,7 +87,33 @@ public sealed class LoginEndpoint : IEndpointDefinition
             userAgent: httpContext.Request.Headers.UserAgent.ToString(),
             ipAddress: httpContext.Connection.RemoteIpAddress?.ToString());
 
+        var session = user.AddSession(
+            refreshTokenHash: refreshTokenHash,
+            expiresAtUtc: refreshTokenExpiresAtUtc,
+            userAgent: httpContext.Request.Headers.UserAgent.ToString(),
+            ipAddress: httpContext.Connection.RemoteIpAddress?.ToString());
+
+        accessToken = jwtTokenGenerator.Generate(user, roles, session.Id);
+
+        var oldValues = new
+        {
+            user.Id,
+            user.LastLoginAtUtc
+        };
+
         user.MarkLoggedIn();
+
+        auditLogWriter.AddAnonymous(
+            action: AuditAction.UserLoggedIn,
+            entityName: "User",
+            entityId: user.Id.ToString(),
+            oldValues: oldValues,
+            newValues: new
+            {
+                user.Id,
+                user.LastLoginAtUtc,
+                SessionId = session.Id
+            });
 
         await db.SaveChangesAsync(ct);
 

@@ -8,10 +8,14 @@ public sealed class LoginValidator : AbstractValidator<LoginCommand>
     {
         RuleFor(command => command.EmailOrUsername)
             .NotEmpty()
-            .MaximumLength(320);
+            .WithMessage("Email or username is required.")
+            .MaximumLength(320)
+            .WithMessage("Email or username must be 320 characters or fewer.");
 
         RuleFor(command => command.Password)
             .NotEmpty()
-            .MaximumLength(100);
+            .WithMessage("Password is required.")
+            .MaximumLength(100)
+            .WithMessage("Password must be 100 characters or fewer.");
     }
 }

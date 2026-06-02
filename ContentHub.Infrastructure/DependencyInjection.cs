@@ -16,6 +16,8 @@ public static class DependencyInjection
     {
         services.Configure<JwtOptions>(
             configuration.GetSection(JwtOptions.SectionName));
+        services.Configure<AuthLinkOptions>(
+            configuration.GetSection(AuthLinkOptions.SectionName));
 
         services.AddHttpContextAccessor();
 
@@ -23,6 +25,8 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IRefreshTokenGenerator, RefreshTokenGenerator>();
+        services.AddScoped<ISecurityTokenGenerator, SecurityTokenGenerator>();
+        services.AddScoped<IAuthEmailSender, DevelopmentAuthEmailSender>();
         services.AddScoped<IPermissionService, PermissionService>();
         services.AddScoped<RefreshTokenService>();
         services.AddScoped<IFileHashCalculator, FileHashCalculator>();

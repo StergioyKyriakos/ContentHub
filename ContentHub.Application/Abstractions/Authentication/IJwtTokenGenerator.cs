@@ -4,5 +4,8 @@ namespace ContentHub.Application.Abstractions.Authentication;
 
 public interface IJwtTokenGenerator
 {
-    string Generate(User user, IReadOnlyCollection<string> roles);
+    string Generate(
+        User user,
+        IReadOnlyCollection<string> roles,
+        Guid? sessionId = null);
 }

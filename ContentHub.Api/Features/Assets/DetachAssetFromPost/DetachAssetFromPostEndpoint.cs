@@ -1,10 +1,13 @@
+using ContentHub.Api.Common.Auditing;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.Assets.Shared;
 using ContentHub.Application.Common.Security;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Entities.Common;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ContentHub.Api.Features.Assets.DetachAssetFromPost;
@@ -20,9 +23,10 @@ public sealed class DetachAssetFromPostEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        [AsParameters] DetachAssetFromPostCommand command,
+        [FromBody] DetachAssetFromPostCommand command,
         IValidator<DetachAssetFromPostCommand> validator,
         ContentHubDbContext db,
+        AuditLogWriter auditLogWriter,
         CancellationToken ct)
     {
         var validationResult = await validator.ValidateAsync(command, ct);
@@ -40,7 +44,23 @@ public sealed class DetachAssetFromPostEndpoint : IEndpointDefinition
             return Results.NotFound(ApiResponse<DomainError>.Fail(AssetErrors.PostNotFound));
         }
 
+        var oldValues = post.Assets
+            .Where(asset => asset.AssetId == command.AssetId)
+            .Select(asset => new
+            {
+                asset.PostId,
+                asset.AssetId,
+                asset.DisplayOrder
+            })
+            .FirstOrDefault();
+
         post.DetachAsset(command.AssetId);
+
+        auditLogWriter.Add(
+            action: AuditAction.AssetDetachedFromPost,
+            entityName: "PostAsset",
+            entityId: $"{command.PostId}:{command.AssetId}",
+            oldValues: oldValues);
 
         await db.SaveChangesAsync(ct);
 

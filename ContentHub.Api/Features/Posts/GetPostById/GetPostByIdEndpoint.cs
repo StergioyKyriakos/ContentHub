@@ -20,7 +20,7 @@ public sealed class GetPostByIdEndpoint : IEndpointDefinition
             .RequireAuthorization(Policies.AuthorOrEditorOrAdmin);
     }
 
-    private static async Task<IResult> Handle([AsParameters] GetPostByIdQuery request, ContentHubDbContext db, CancellationToken ct)
+    private static async Task<IResult> Handle([FromBody] GetPostByIdQuery request, ContentHubDbContext db, CancellationToken ct)
     {
         var post = await db.Posts
             .AsNoTracking()

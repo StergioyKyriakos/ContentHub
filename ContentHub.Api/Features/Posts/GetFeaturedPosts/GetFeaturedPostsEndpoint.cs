@@ -1,6 +1,5 @@
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.Posts.Shared;
-using ContentHub.Data.Entities.Posts; // Ensure your concrete Post entity namespace is imported
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Enums;
@@ -22,7 +21,7 @@ public sealed class GetFeaturedPostsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        [AsParameters] GetFeaturedPostsQuery query,
+        [FromBody] GetFeaturedPostsQuery query,
         IValidator<GetFeaturedPostsQuery> validator,
         ContentHubDbContext db,
         CancellationToken ct)

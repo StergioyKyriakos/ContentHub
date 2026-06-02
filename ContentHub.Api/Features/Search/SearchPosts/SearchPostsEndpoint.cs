@@ -5,8 +5,8 @@ using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using FluentValidation;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc;
 using System.Linq.Expressions;
 
 namespace ContentHub.Api.Features.Search.SearchPosts;
@@ -22,7 +22,7 @@ public sealed class SearchPostsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        SearchPostsQuery query,
+        [FromBody] SearchPostsQuery query,
         IValidator<SearchPostsQuery> validator,
         ContentHubDbContext db,
         CancellationToken ct)

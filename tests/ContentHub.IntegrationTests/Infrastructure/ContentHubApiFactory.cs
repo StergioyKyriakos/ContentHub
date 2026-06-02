@@ -1,3 +1,4 @@
+using ContentHub.Application.Abstractions.Authentication;
 using ContentHub.Data.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -68,11 +69,16 @@ public sealed class ContentHubApiFactory : WebApplicationFactory<Program>, IAsyn
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<ContentHubDbContext>>();
+            services.RemoveAll<IAuthEmailSender>();
 
             services.AddDbContext<ContentHubDbContext>(options =>
             {
                 options.UseNpgsql(_databaseFixture.ConnectionString);
             });
+
+            services.AddSingleton<TestAuthEmailSender>();
+            services.AddSingleton<IAuthEmailSender>(sp =>
+                sp.GetRequiredService<TestAuthEmailSender>());
         });
     }
 
