@@ -26,7 +26,7 @@ public sealed class RevokeAllSessionsEndpoint : IEndpointDefinition
     {
         if (currentUser.UserId is null)
         {
-            return Results.Unauthorized();
+            return ResultsFactory.Unauthorized();
         }
 
         var sessions = await db.UserSessions

@@ -28,7 +28,7 @@ public sealed class RevokeCurrentSessionEndpoint : IEndpointDefinition
     {
         if (currentUser.UserId is null)
         {
-            return Results.Unauthorized();
+            return ResultsFactory.Unauthorized();
         }
 
         var sessionId = GetCurrentSessionId(httpContext);

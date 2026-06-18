@@ -22,6 +22,7 @@ public sealed class MarkNotificationAsReadEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        Guid id,
         [FromBody] MarkNotificationAsReadCommand command,
         IValidator<MarkNotificationAsReadCommand> validator,
         ICurrentUserProvider currentUserProvider,
@@ -38,7 +39,14 @@ public sealed class MarkNotificationAsReadEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(command, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (id != command.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
         }
 
         var notification = await db.Notifications

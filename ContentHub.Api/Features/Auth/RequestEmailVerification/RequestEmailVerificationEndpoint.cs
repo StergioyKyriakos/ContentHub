@@ -26,6 +26,7 @@ public sealed class RequestEmailVerificationEndpoint : IEndpointDefinition
         ISecurityTokenGenerator securityTokenGenerator,
         IAuthEmailSender authEmailSender,
         HttpContext httpContext,
+        ILogger<RequestEmailVerificationEndpoint> logger,
         CancellationToken ct)
     {
         var response = new RequestEmailVerificationResponse
@@ -59,7 +60,18 @@ public sealed class RequestEmailVerificationEndpoint : IEndpointDefinition
             ipAddress: httpContext.Connection.RemoteIpAddress?.ToString());
 
         await db.SaveChangesAsync(ct);
-        await authEmailSender.SendEmailVerificationAsync(user, token, ct);
+        try
+        {
+            await authEmailSender.SendEmailVerificationAsync(user, token, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Email verification delivery failed for user {UserId}.", user.Id);
+        }
 
         return Results.Ok(ApiResponse<RequestEmailVerificationResponse>.Ok(response));
     }

@@ -103,7 +103,10 @@ public sealed class CategoryFlowTests : IntegrationTestBase
 
         updateBody.Should().Contain(updatedName);
 
-        var deleteResponse = await Client.DeleteAsync($"/api/categories/{categoryId}");
+        var deleteResponse = await DeleteAsJsonAsync($"/api/categories/{categoryId}", new
+        {
+            id = categoryId
+        });
 
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 

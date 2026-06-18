@@ -1,6 +1,7 @@
 using ContentHub.Application.Abstractions.Authentication;
 using ContentHub.Data.Entities.Users;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace ContentHub.Data.Persistence.Seed;
 
@@ -9,19 +10,28 @@ public sealed class AdminUserSeeder
     private const string AdminEmail = "admin@contenthub.local";
     private const string AdminUsername = "admin";
     private const string AdminDisplayName = "Admin";
-    private const string AdminPassword = "Admin123!";
 
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IConfiguration _configuration;
 
-    public AdminUserSeeder(IPasswordHasher passwordHasher)
+    public AdminUserSeeder(
+        IPasswordHasher passwordHasher,
+        IConfiguration configuration)
     {
         _passwordHasher = passwordHasher;
+        _configuration = configuration;
     }
 
     public async Task SeedAsync(
         ContentHubDbContext db,
         CancellationToken cancellationToken = default)
     {
+        var adminPassword = _configuration["Seed:Admin:Password"];
+        if (string.IsNullOrWhiteSpace(adminPassword))
+        {
+            throw new InvalidOperationException("Seed admin password is missing. Set Seed:Admin:Password before enabling seed data.");
+        }
+
         var normalizedEmail = AdminEmail.ToUpperInvariant();
 
         var exists = await db.Users
@@ -40,7 +50,7 @@ public sealed class AdminUserSeeder
             throw new InvalidOperationException("Admin role was not seeded.");
         }
 
-        var passwordHash = _passwordHasher.Hash(AdminPassword);
+        var passwordHash = _passwordHasher.Hash(adminPassword);
 
         var admin = new User(
             email: AdminEmail,

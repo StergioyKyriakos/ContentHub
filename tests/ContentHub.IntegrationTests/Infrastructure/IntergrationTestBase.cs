@@ -12,9 +12,20 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     protected IntegrationTestBase(
         DatabaseFixture databaseFixture,
         ITestOutputHelper output)
+        : this(
+            databaseFixture,
+            output,
+            null)
+    {
+    }
+
+    protected IntegrationTestBase(
+        DatabaseFixture databaseFixture,
+        ITestOutputHelper output,
+        ContentHubApiFactoryOptions? factoryOptions)
     {
         Output = output;
-        Factory = new ContentHubApiFactory(databaseFixture);
+        Factory = new ContentHubApiFactory(databaseFixture, factoryOptions);
         Client = Factory.CreateClient();
         Auth = new AuthTestHelper(Client, output);
         Seeder = new TestDataSeeder(Factory);
@@ -49,6 +60,16 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     protected Task<HttpResponseMessage> GetAsJsonAsync(string url, object body)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, url)
+        {
+            Content = JsonContent.Create(body)
+        };
+
+        return Client.SendAsync(request);
+    }
+
+    protected Task<HttpResponseMessage> DeleteAsJsonAsync(string url, object body)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Delete, url)
         {
             Content = JsonContent.Create(body)
         };

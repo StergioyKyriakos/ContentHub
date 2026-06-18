@@ -4,7 +4,7 @@ namespace ContentHub.Api.Features.Search.SearchAssets;
 
 public sealed class SearchAssetsQueryValidator : AbstractValidator<SearchAssetsQuery>
 {
-    private static readonly string[] AllowedSortFields = ["createdat", "filename", "originalfilename", "size", "type"];
+    private static readonly string[] AllowedSortFields = ["relevance", "createdat", "filename", "originalfilename", "size", "type"];
     private static readonly string[] AllowedDirections = ["asc", "desc"];
 
     public SearchAssetsQueryValidator()

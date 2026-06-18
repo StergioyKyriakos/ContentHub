@@ -41,7 +41,7 @@ public sealed class LocalFileStorage : IFileStorage
 
         var absoluteDirectory = Path.Combine(
             Directory.GetCurrentDirectory(),
-            _options.LocalRootPath,
+            _options.EffectiveLocalRootPath,
             relativeDirectory);
 
         Directory.CreateDirectory(absoluteDirectory);
@@ -78,7 +78,7 @@ public sealed class LocalFileStorage : IFileStorage
     {
         var absolutePath = Path.Combine(
             Directory.GetCurrentDirectory(),
-            _options.LocalRootPath,
+            _options.EffectiveLocalRootPath,
             storagePath);
 
         if (File.Exists(absolutePath))
@@ -95,7 +95,7 @@ public sealed class LocalFileStorage : IFileStorage
     {
         var absolutePath = Path.Combine(
             Directory.GetCurrentDirectory(),
-            _options.LocalRootPath,
+            _options.EffectiveLocalRootPath,
             storagePath);
 
         return Task.FromResult(File.Exists(absolutePath));

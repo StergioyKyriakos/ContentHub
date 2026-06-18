@@ -25,11 +25,19 @@ public sealed class SchedulePostEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        Guid id,
         [FromBody] SchedulePostCommand command,
         ContentHubDbContext db,
         AuditLogWriter auditLogWriter,
         CancellationToken ct)
     {
+        if (id != command.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
+        }
+
         var post = await db.Posts.FirstOrDefaultAsync(p => p.Id == command.Id, ct);
 
         if (post is null)

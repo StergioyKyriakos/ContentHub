@@ -540,16 +540,6 @@ public sealed class AuthFlowTests : IntegrationTestBase
         public List<SessionData> Sessions { get; init; } = [];
     }
 
-    private Task<HttpResponseMessage> DeleteAsJsonAsync(string url, object body)
-    {
-        var request = new HttpRequestMessage(HttpMethod.Delete, url)
-        {
-            Content = JsonContent.Create(body)
-        };
-
-        return Client.SendAsync(request);
-    }
-
     private sealed class SessionData
     {
         public Guid Id { get; init; }

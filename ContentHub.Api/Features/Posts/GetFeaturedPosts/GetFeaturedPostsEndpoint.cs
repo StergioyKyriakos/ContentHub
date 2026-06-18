@@ -1,12 +1,15 @@
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.Posts.Shared;
+using ContentHub.Application.Abstractions.Caching;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
+using ContentHub.Infrastructure.Caching;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace ContentHub.Api.Features.Posts.GetFeaturedPosts;
 
@@ -24,12 +27,24 @@ public sealed class GetFeaturedPostsEndpoint : IEndpointDefinition
         [FromBody] GetFeaturedPostsQuery query,
         IValidator<GetFeaturedPostsQuery> validator,
         ContentHubDbContext db,
+        ICacheService cacheService,
+        IOptions<RedisOptions> redisOptions,
         CancellationToken ct)
     {
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var cacheKey = CacheKeys.PublicFeaturedPosts(page, pageSize);
+        var cached = await cacheService.GetAsync<GetFeaturedPostsResponse>(cacheKey, ct);
+
+        if (cached is not null)
+        {
+            return Results.Ok(ApiResponse<GetFeaturedPostsResponse>.Ok(cached));
         }
 
         var baseQuery = db.Posts
@@ -40,8 +55,8 @@ public sealed class GetFeaturedPostsEndpoint : IEndpointDefinition
 
         var items = await baseQuery
             .OrderByDescending(post => post.FeaturedAtUtc)
-            .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(post => new PostSummaryDto
             {
                 Id = post.Id,
@@ -58,10 +73,16 @@ public sealed class GetFeaturedPostsEndpoint : IEndpointDefinition
         {
             Posts = PagedResponse<PostSummaryDto>.Create(
                 items,
-                query.Page,
-                query.PageSize,
+                page,
+                pageSize,
                 totalItems)
         };
+
+        await cacheService.SetAsync(
+            cacheKey,
+            response,
+            TimeSpan.FromMinutes(redisOptions.Value.FeaturedPostsCacheMinutes),
+            ct);
 
         return Results.Ok(ApiResponse<GetFeaturedPostsResponse>.Ok(response));
     }

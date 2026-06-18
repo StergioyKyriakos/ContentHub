@@ -24,17 +24,25 @@ public sealed class DeleteAssetEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        Guid id,
         [FromBody] DeleteAssetCommand command,
         IValidator<DeleteAssetCommand> validator,
         ContentHubDbContext db,
-        IFileStorage fileStorage,
+        IFileStorageFactory fileStorageFactory,
         AuditLogWriter auditLogWriter,
         CancellationToken ct)
     {
         var validationResult = await validator.ValidateAsync(command, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (id != command.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
         }
 
         var asset = await db.Assets
@@ -83,6 +91,8 @@ public sealed class DeleteAssetEndpoint : IEndpointDefinition
                 asset.DeletedAtUtc
             });
         
+        var fileStorage = fileStorageFactory.GetForProvider(asset.Provider);
+
         await fileStorage.DeleteAsync(asset.StoragePath, ct);
 
         await db.SaveChangesAsync(ct);

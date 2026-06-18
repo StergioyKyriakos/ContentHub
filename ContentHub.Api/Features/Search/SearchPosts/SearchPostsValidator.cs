@@ -4,7 +4,7 @@ namespace ContentHub.Api.Features.Search.SearchPosts;
 
 public sealed class SearchPostsQueryValidator : AbstractValidator<SearchPostsQuery>
 {
-    private static readonly string[] AllowedSortFields = ["publishedAt", "createdAt", "title", "isFeatured"];
+    private static readonly string[] AllowedSortFields = ["relevance", "publishedAt", "createdAt", "title", "isFeatured"];
     private static readonly string[] AllowedDirections = ["asc", "desc"];
 
     public SearchPostsQueryValidator()

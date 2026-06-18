@@ -32,35 +32,29 @@ public sealed class SearchEverythingEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
         }
 
         var isAuthenticated = httpContext.User.Identity?.IsAuthenticated == true;
         var search = query.Q?.Trim();
-        var pattern = !string.IsNullOrWhiteSpace(search) ? $"%{search}%" : null;
+        var hasSearch = !string.IsNullOrWhiteSpace(search);
 
         var postsQuery = db.Posts.AsNoTracking()
             .Where(post => post.Status == PostStatus.Published);
 
-        if (pattern is not null)
+        if (hasSearch)
         {
-            postsQuery = postsQuery.Where(post =>
-                EF.Functions.ILike(post.Title, pattern) ||
-                EF.Functions.ILike(post.Slug, pattern) ||
-                EF.Functions.ILike(post.Summary ?? string.Empty, pattern) ||
-                EF.Functions.ILike(post.Content, pattern));
+            postsQuery = postsQuery.Where(post => post.SearchVector.Matches(
+                EF.Functions.WebSearchToTsQuery("english", search!)));
         }
 
         var assetsQuery = db.Assets.AsNoTracking();
         
         var includeAssets = isAuthenticated;
-        if (includeAssets && pattern is not null)
+        if (includeAssets && hasSearch)
         {
-            assetsQuery = assetsQuery.Where(asset =>
-                EF.Functions.ILike(asset.FileName, pattern) ||
-                EF.Functions.ILike(asset.OriginalFileName, pattern) ||
-                EF.Functions.ILike(asset.ContentType, pattern) ||
-                EF.Functions.ILike(asset.StoragePath, pattern));
+            assetsQuery = assetsQuery.Where(asset => asset.SearchVector.Matches(
+                EF.Functions.WebSearchToTsQuery("simple", search!)));
         }
 
         var totalPosts = await postsQuery.CountAsync(ct);
@@ -69,56 +63,107 @@ public sealed class SearchEverythingEndpoint : IEndpointDefinition
 
         var upperLimit = query.Page * query.PageSize;
 
-        var postResults = await postsQuery
-            .OrderByDescending(post => post.PublishedAtUtc)
-            .Take(upperLimit) 
-            .Select(post => new SearchEverythingItemDto
-            {
-                Type = SearchableContentType.Post,
-                Id = post.Id,
-                Title = post.Title,
-                Description = post.Summary,
-                Slug = post.Slug,
-                Url = $"/api/public/posts/{post.Slug}",
-                CreatedAtUtc = post.PublishedAtUtc ?? post.CreatedAtUtc
-            })
-            .ToListAsync(ct);
-
-        var assetResults = new List<SearchEverythingItemDto>();
-        if (includeAssets)
-        {
-            var assets = await assetsQuery
-                .OrderByDescending(asset => asset.CreatedAtUtc)
+        var postRows = hasSearch
+            ? await postsQuery
+                .OrderByDescending(post => post.SearchVector.Rank(EF.Functions.WebSearchToTsQuery("english", search!)))
+                .ThenByDescending(post => post.PublishedAtUtc)
                 .Take(upperLimit)
-                .Select(asset => new
+                .Select(post => new
                 {
-                    asset.Id,
-                    asset.OriginalFileName,
-                    asset.ContentType,
-                    asset.StoragePath,
-                    asset.CreatedAtUtc
+                    post.Id,
+                    post.Title,
+                    post.Summary,
+                    post.Slug,
+                    CreatedAtUtc = post.PublishedAtUtc ?? post.CreatedAtUtc,
+                    Rank = post.SearchVector.Rank(EF.Functions.WebSearchToTsQuery("english", search!))
+                })
+                .ToListAsync(ct)
+            : await postsQuery
+                .OrderByDescending(post => post.PublishedAtUtc)
+                .Take(upperLimit)
+                .Select(post => new
+                {
+                    post.Id,
+                    post.Title,
+                    post.Summary,
+                    post.Slug,
+                    CreatedAtUtc = post.PublishedAtUtc ?? post.CreatedAtUtc,
+                    Rank = 0.0f
                 })
                 .ToListAsync(ct);
 
-            assetResults = assets
-                .Select(asset => new SearchEverythingItemDto
+        var postResults = postRows
+            .Select(post => new RankedSearchItem(
+                new SearchEverythingItemDto
                 {
-                    Type = SearchableContentType.Asset,
-                    Id = asset.Id,
-                    Title = asset.OriginalFileName,
-                    Description = asset.ContentType,
-                    Slug = null,
-                    Url = fileUrlResolver.ResolveUrl(asset.StoragePath),
-                    CreatedAtUtc = asset.CreatedAtUtc
-                })
+                    Type = SearchableContentType.Post,
+                    Id = post.Id,
+                    Title = post.Title,
+                    Description = post.Summary,
+                    Slug = post.Slug,
+                    Url = $"/api/public/posts/{post.Slug}",
+                    CreatedAtUtc = post.CreatedAtUtc
+                },
+                post.Rank))
+            .ToList();
+
+        var assetResults = new List<RankedSearchItem>();
+        if (includeAssets)
+        {
+            var assets = hasSearch
+                ? await assetsQuery
+                    .OrderByDescending(asset => asset.SearchVector.Rank(EF.Functions.WebSearchToTsQuery("simple", search!)))
+                    .ThenByDescending(asset => asset.CreatedAtUtc)
+                    .Take(upperLimit)
+                    .Select(asset => new
+                    {
+                        asset.Id,
+                        asset.OriginalFileName,
+                        asset.ContentType,
+                        asset.StoragePath,
+                        asset.Provider,
+                        asset.CreatedAtUtc,
+                        Rank = asset.SearchVector.Rank(EF.Functions.WebSearchToTsQuery("simple", search!))
+                    })
+                    .ToListAsync(ct)
+                : await assetsQuery
+                    .OrderByDescending(asset => asset.CreatedAtUtc)
+                    .Take(upperLimit)
+                    .Select(asset => new
+                    {
+                        asset.Id,
+                        asset.OriginalFileName,
+                        asset.ContentType,
+                        asset.StoragePath,
+                        asset.Provider,
+                        asset.CreatedAtUtc,
+                        Rank = 0.0f
+                    })
+                    .ToListAsync(ct);
+
+            assetResults = assets
+                .Select(asset => new RankedSearchItem(
+                    new SearchEverythingItemDto
+                    {
+                        Type = SearchableContentType.Asset,
+                        Id = asset.Id,
+                        Title = asset.OriginalFileName,
+                        Description = asset.ContentType,
+                        Slug = null,
+                        Url = fileUrlResolver.ResolveUrl(asset.StoragePath, asset.Provider),
+                        CreatedAtUtc = asset.CreatedAtUtc
+                    },
+                    asset.Rank))
                 .ToList();
         }
 
         var items = postResults
             .Concat(assetResults)
-            .OrderByDescending(result => result.CreatedAtUtc)
+            .OrderByDescending(result => result.Rank)
+            .ThenByDescending(result => result.Item.CreatedAtUtc)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
+            .Select(result => result.Item)
             .ToList();
 
         var response = new SearchEverythingResponse
@@ -132,4 +177,8 @@ public sealed class SearchEverythingEndpoint : IEndpointDefinition
 
         return Results.Ok(ApiResponse<SearchEverythingResponse>.Ok(response));
     }
+
+    private sealed record RankedSearchItem(
+        SearchEverythingItemDto Item,
+        float Rank);
 }

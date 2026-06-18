@@ -66,6 +66,7 @@ public sealed class GetAssetsEndpoint : IEndpointDefinition
                 asset.ContentType,
                 asset.Size,
                 asset.StoragePath,
+                asset.Provider,
                 asset.Type,
                 asset.Visibility,
                 asset.CreatedAtUtc
@@ -80,7 +81,7 @@ public sealed class GetAssetsEndpoint : IEndpointDefinition
                 OriginalFileName = asset.OriginalFileName,
                 ContentType = asset.ContentType,
                 Size = asset.Size,
-                Url = fileUrlResolver.ResolveUrl(asset.StoragePath),
+                Url = fileUrlResolver.ResolveUrl(asset.StoragePath, asset.Provider),
                 Type = asset.Type,
                 Visibility = asset.Visibility,
                 CreatedAtUtc = asset.CreatedAtUtc

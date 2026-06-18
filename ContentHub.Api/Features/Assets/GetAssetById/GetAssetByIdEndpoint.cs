@@ -23,6 +23,7 @@ public sealed class GetAssetByIdEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        Guid id,
         [FromBody] GetAssetByIdQuery query,
         IValidator<GetAssetByIdQuery> validator,
         ContentHubDbContext db,
@@ -32,7 +33,14 @@ public sealed class GetAssetByIdEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (id != query.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
         }
 
         IQueryable<Asset> dbQuery = db.Assets;
@@ -55,7 +63,7 @@ public sealed class GetAssetByIdEndpoint : IEndpointDefinition
             Size = asset.Size,
             Hash = asset.Hash,
             StoragePath = asset.StoragePath,
-            Url = fileUrlResolver.ResolveUrl(asset.StoragePath),
+            Url = fileUrlResolver.ResolveUrl(asset.StoragePath, asset.Provider),
             Provider = asset.Provider,
             Visibility = asset.Visibility,
             Type = asset.Type,

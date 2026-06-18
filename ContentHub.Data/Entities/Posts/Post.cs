@@ -2,6 +2,7 @@ using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using NpgsqlTypes;
 
 namespace ContentHub.Data.Entities.Posts;
 
@@ -63,6 +64,8 @@ public sealed class Post : AggregateRoot
     public Guid CreatedById { get; set; }
 
     public Guid? UpdatedById { get; set; }
+
+    public NpgsqlTsVector SearchVector { get; private set; } = null!;
 
     public IReadOnlyCollection<PostCategory> Categories => _categories.AsReadOnly();
 
@@ -292,6 +295,17 @@ public sealed class PostConfiguration : IEntityTypeConfiguration<Post>
 
         builder.Property(post => post.UpdatedById);
 
+        builder.Property(post => post.SearchVector)
+            .HasColumnType("tsvector")
+            .HasComputedColumnSql(
+                """
+                setweight(to_tsvector('english', coalesce("Title", '')), 'A') ||
+                setweight(to_tsvector('english', coalesce("Slug", '')), 'A') ||
+                setweight(to_tsvector('english', coalesce("Summary", '')), 'B') ||
+                setweight(to_tsvector('english', coalesce("Content", '')), 'C')
+                """,
+                stored: true);
+
         builder.Property(post => post.CreatedAtUtc)
             .IsRequired();
 
@@ -310,6 +324,9 @@ public sealed class PostConfiguration : IEntityTypeConfiguration<Post>
         builder.HasIndex(post => post.IsFeatured);
 
         builder.HasIndex(post => post.PublishedAtUtc);
+
+        builder.HasIndex(post => post.SearchVector)
+            .HasMethod("GIN");
 
         builder.HasQueryFilter(post => !post.IsDeleted);
     }

@@ -7,6 +7,7 @@ using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
+using ContentHub.Infrastructure.Caching;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,16 +25,25 @@ public sealed class RemoveFeaturedPostEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        Guid id,
         [FromBody] RemoveFeaturedPostCommand command,
         IValidator<RemoveFeaturedPostCommand> validator,
         ContentHubDbContext db,
         AuditLogWriter auditLogWriter,
+        CacheInvalidationService cacheInvalidationService,
         CancellationToken ct)
     {
         var validationResult = await validator.ValidateAsync(command, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (id != command.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
         }
 
         var post = await db.Posts.FirstOrDefaultAsync(p => p.Id == command.Id, ct);
@@ -65,6 +75,7 @@ public sealed class RemoveFeaturedPostEndpoint : IEndpointDefinition
             });
 
         await db.SaveChangesAsync(ct);
+        await cacheInvalidationService.InvalidateFeaturedPostsAsync(ct);
 
         var response = new RemoveFeaturedPostResponse
         {

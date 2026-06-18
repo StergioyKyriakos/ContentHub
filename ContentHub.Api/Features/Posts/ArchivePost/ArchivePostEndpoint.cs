@@ -7,6 +7,8 @@ using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
+using ContentHub.Infrastructure.Caching;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,11 +25,27 @@ public sealed class ArchivePostEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        Guid id,
         [FromBody] ArchivePostCommand command,
+        IValidator<ArchivePostCommand> validator,
         ContentHubDbContext db,
         AuditLogWriter auditLogWriter,
+        CacheInvalidationService cacheInvalidationService,
         CancellationToken ct)
     {
+        var validationResult = await validator.ValidateAsync(command, ct);
+        if (!validationResult.IsValid)
+        {
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (id != command.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
+        }
+
         var post = await db.Posts.FirstOrDefaultAsync(post => post.Id == command.Id, ct);
 
         if (post is null)
@@ -61,6 +79,7 @@ public sealed class ArchivePostEndpoint : IEndpointDefinition
             });
 
         await db.SaveChangesAsync(ct);
+        await cacheInvalidationService.InvalidateFeaturedPostsAsync(ct);
         
         var response = new ArchivePostResponse
         {

@@ -11,8 +11,8 @@ using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using ContentHub.Infrastructure.Storage;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 
 namespace ContentHub.Api.Features.Assets.UploadAsset;
 
@@ -25,51 +25,39 @@ public sealed class UploadAssetEndpoint : IEndpointDefinition
             .WithName("UploadAsset")
             .RequireAuthorization(Policies.AuthenticatedOnly)
             .DisableAntiforgery()
-            .Accepts<IFormFile>("multipart/form-data");
+            .Accepts<UploadAssetCommand>("multipart/form-data");
     }
 
     private static async Task<IResult> Handle(
-        IFormFile file,
-        [FromForm] AssetVisibility visibility,
+        [FromForm] UploadAssetCommand command,
+        IValidator<UploadAssetCommand> validator,
         ICurrentUserProvider currentUserProvider,
         IFileStorage fileStorage,
         IFileUrlResolver fileUrlResolver,
-        IOptions<StorageOptions> storageOptions,
         ContentHubDbContext db,
         AuditLogWriter auditLogWriter, 
         CancellationToken ct)
     {
         if (currentUserProvider.UserId is null)
         {
-            return Results.Unauthorized();
+            return ResultsFactory.Unauthorized();
         }
 
-        if (file is null || file.Length == 0)
+        var validationResult = await validator.ValidateAsync(command, ct);
+        if (!validationResult.IsValid)
         {
-            return Results.BadRequest(ApiResponse<DomainError>.Fail(AssetErrors.FileRequired));
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
         }
 
-        if (file.Length > storageOptions.Value.MaxFileSizeBytes)
-        {
-            return Results.BadRequest(ApiResponse<DomainError>.Fail(AssetErrors.FileTooLarge));
-        }
-
-        var allowedContentTypes = storageOptions.Value.AllowedContentTypes;
-
-        if (!allowedContentTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
-        {
-            return Results.BadRequest(ApiResponse<DomainError>.Fail(AssetErrors.ContentTypeNotAllowed));
-        }
-
-        await using var stream = file.OpenReadStream();
+        await using var stream = command.File.OpenReadStream();
 
         var storedFile = await fileStorage.SaveAsync(
             stream,
-            file.FileName,
-            file.ContentType,
+            command.File.FileName,
+            command.File.ContentType,
             ct);
 
-        var assetType = AssetTypeResolver.Resolve(file.ContentType);
+        var assetType = AssetTypeResolver.Resolve(command.File.ContentType);
 
         var asset = new Asset(
             fileName: storedFile.FileName,
@@ -78,15 +66,11 @@ public sealed class UploadAssetEndpoint : IEndpointDefinition
             size: storedFile.Size,
             hash: storedFile.Hash,
             storagePath: storedFile.StoragePath,
-            provider: StorageProvider.Local,
-            visibility: visibility,
+            provider: storedFile.Provider,
+            visibility: command.Visibility,
             type: assetType,
             uploadedById: currentUserProvider.UserId.Value);
 
-        db.Assets.Add(asset);
-
-        await db.SaveChangesAsync(ct);
-        
         auditLogWriter.Add(
             action: AuditAction.AssetUploaded,
             entityName: "Asset",
@@ -104,6 +88,10 @@ public sealed class UploadAssetEndpoint : IEndpointDefinition
                 asset.Type
             });
 
+        db.Assets.Add(asset);
+
+        await db.SaveChangesAsync(ct);
+
         var response = new UploadAssetResponse
         {
             Asset = new AssetDto
@@ -115,7 +103,7 @@ public sealed class UploadAssetEndpoint : IEndpointDefinition
                 Size = asset.Size,
                 Hash = asset.Hash,
                 StoragePath = asset.StoragePath,
-                Url = fileUrlResolver.ResolveUrl(asset.StoragePath),
+                Url = fileUrlResolver.ResolveUrl(asset.StoragePath, asset.Provider),
                 Provider = asset.Provider,
                 Visibility = asset.Visibility,
                 Type = asset.Type,

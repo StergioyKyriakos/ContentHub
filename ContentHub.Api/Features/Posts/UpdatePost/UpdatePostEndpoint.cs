@@ -10,6 +10,7 @@ using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
+using ContentHub.Infrastructure.Caching;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,11 +34,12 @@ public sealed class UpdatePostEndpoint : IEndpointDefinition
         ICurrentUserProvider currentUserProvider,
         ContentHubDbContext db,
         AuditLogWriter auditLogWriter,
+        CacheInvalidationService cacheInvalidationService,
         CancellationToken ct)
     {
         if (currentUserProvider.UserId is null)
         {
-            return Results.Unauthorized();
+            return ResultsFactory.Unauthorized();
         }
 
         var post = await db.Posts
@@ -108,6 +110,8 @@ public sealed class UpdatePostEndpoint : IEndpointDefinition
             return Results.BadRequest(ApiResponse<DomainError>.Fail(PostErrors.AuthorNotFound));
         }
         
+        var wasFeatured = post.IsFeatured;
+
         var oldValues = new
         {
             post.Title,
@@ -146,6 +150,10 @@ public sealed class UpdatePostEndpoint : IEndpointDefinition
             });
 
         await db.SaveChangesAsync(ct);
+        if (wasFeatured)
+        {
+            await cacheInvalidationService.InvalidateFeaturedPostsAsync(ct);
+        }
 
         var response = new UpdatePostResponse
         {

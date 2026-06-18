@@ -1,0 +1,113 @@
+services:
+  contenthub-api:
+    image: contenthub-api:production
+    build:
+      context: .
+      dockerfile: ContentHub.Api/Dockerfile
+      args:
+        BUILD_CONFIGURATION: Release
+    container_name: contenthub-api
+    restart: unless-stopped
+    depends_on:
+      contenthub-postgres:
+        condition: service_healthy
+      contenthub-redis:
+        condition: service_healthy
+      contenthub-mailpit:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      AllowedHosts: ${CONTENTHUB_ALLOWED_HOSTS:-*}
+      ConnectionStrings__Database: Host=contenthub-postgres;Port=5432;Database=${CONTENTHUB_POSTGRES_DB:-contenthub};Username=${CONTENTHUB_POSTGRES_USER:-contenthub};Password=${CONTENTHUB_POSTGRES_PASSWORD:?Set CONTENTHUB_POSTGRES_PASSWORD}
+      Database__ApplyMigrationsOnStartup: ${CONTENTHUB_APPLY_MIGRATIONS_ON_STARTUP:-true}
+      Database__SeedOnStartup: ${CONTENTHUB_SEED_ON_STARTUP:-false}
+      Seed__Admin__Password: ${CONTENTHUB_SEED_ADMIN_PASSWORD:-}
+      Jwt__Issuer: ${CONTENTHUB_JWT_ISSUER:-ContentHub}
+      Jwt__Audience: ${CONTENTHUB_JWT_AUDIENCE:-ContentHub}
+      Jwt__Secret: ${CONTENTHUB_JWT_SECRET:?Set CONTENTHUB_JWT_SECRET}
+      Jwt__ExpirationMinutes: ${CONTENTHUB_JWT_EXPIRATION_MINUTES:-60}
+      Jwt__RefreshTokenExpirationDays: ${CONTENTHUB_REFRESH_TOKEN_EXPIRATION_DAYS:-30}
+      AuthLinks__PublicBaseUrl: ${CONTENTHUB_PUBLIC_BASE_URL:-http://localhost:8080}
+      Email__Smtp__Enabled: ${CONTENTHUB_SMTP_ENABLED:-true}
+      Email__Smtp__Host: ${CONTENTHUB_SMTP_HOST:-contenthub-mailpit}
+      Email__Smtp__Port: ${CONTENTHUB_SMTP_PORT:-1025}
+      Email__Smtp__UseSsl: ${CONTENTHUB_SMTP_USE_SSL:-false}
+      Email__Smtp__Username: ${CONTENTHUB_SMTP_USERNAME:-}
+      Email__Smtp__Password: ${CONTENTHUB_SMTP_PASSWORD:-}
+      Email__Smtp__FromEmail: ${CONTENTHUB_SMTP_FROM_EMAIL:-no-reply@contenthub.local}
+      Email__Smtp__FromName: ${CONTENTHUB_SMTP_FROM_NAME:-ContentHub}
+      Redis__Enabled: "true"
+      Redis__ConnectionString: contenthub-redis:6379
+      Redis__FeaturedPostsCacheMinutes: ${CONTENTHUB_FEATURED_POSTS_CACHE_MINUTES:-5}
+      RateLimiting__FailClosedWhenUnavailable: ${CONTENTHUB_RATE_LIMITING_FAIL_CLOSED:-true}
+      Storage__Provider: ${CONTENTHUB_STORAGE_PROVIDER:-Local}
+      Storage__RootPath: /app/storage/assets
+      Storage__LocalRootPath: /app/storage/assets
+      Storage__PublicBaseUrl: ${CONTENTHUB_STORAGE_PUBLIC_BASE_URL:-/assets}
+      Storage__AzureBlob__ConnectionString: ${CONTENTHUB_AZURE_BLOB_CONNECTION_STRING:-}
+      Storage__AzureBlob__ContainerName: ${CONTENTHUB_AZURE_BLOB_CONTAINER_NAME:-}
+      Storage__AzureBlob__PublicBaseUrl: ${CONTENTHUB_AZURE_BLOB_PUBLIC_BASE_URL:-}
+      Storage__S3__BucketName: ${CONTENTHUB_S3_BUCKET_NAME:-}
+      Storage__S3__Region: ${CONTENTHUB_S3_REGION:-}
+      Storage__S3__PublicBaseUrl: ${CONTENTHUB_S3_PUBLIC_BASE_URL:-}
+      BackgroundJobs__Enabled: ${CONTENTHUB_BACKGROUND_JOBS_ENABLED:-true}
+      BackgroundJobs__RequireDistributedLock: ${CONTENTHUB_BACKGROUND_JOBS_REQUIRE_DISTRIBUTED_LOCK:-true}
+    ports:
+      - "${CONTENTHUB_API_HTTP_PORT:-8080}:8080"
+    volumes:
+      - contenthub_api_storage:/app/storage/assets
+
+  contenthub-postgres:
+    image: postgres:16
+    container_name: contenthub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${CONTENTHUB_POSTGRES_DB:-contenthub}
+      POSTGRES_USER: ${CONTENTHUB_POSTGRES_USER:-contenthub}
+      POSTGRES_PASSWORD: ${CONTENTHUB_POSTGRES_PASSWORD:?Set CONTENTHUB_POSTGRES_PASSWORD}
+    ports:
+      - "${CONTENTHUB_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - contenthub_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  contenthub-redis:
+    image: redis:7.4-alpine
+    container_name: contenthub-redis
+    restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "${CONTENTHUB_REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - contenthub_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  contenthub-mailpit:
+    image: axllent/mailpit:v1.21
+    container_name: contenthub-mailpit
+    restart: unless-stopped
+    ports:
+      - "${CONTENTHUB_MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${CONTENTHUB_MAILPIT_WEB_PORT:-8025}:8025"
+    volumes:
+      - contenthub_mailpit_data:/data
+    environment:
+      MP_DATABASE: /data/mailpit.db
+
+volumes:
+  contenthub_api_storage:
+  contenthub_postgres_data:
+  contenthub_redis_data:
+  contenthub_mailpit_data:

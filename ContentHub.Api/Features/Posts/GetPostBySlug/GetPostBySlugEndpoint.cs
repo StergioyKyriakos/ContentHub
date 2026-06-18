@@ -22,6 +22,7 @@ public sealed class GetPostBySlugEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        string slug,
         [FromBody] GetPostBySlugQuery query,
         IValidator<GetPostBySlugQuery> validator,
         ContentHubDbContext db,
@@ -30,7 +31,14 @@ public sealed class GetPostBySlugEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (!string.Equals(slug, query.Slug, StringComparison.OrdinalIgnoreCase))
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route slug and body slug must match.");
         }
 
         var post = await db.Posts

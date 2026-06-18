@@ -21,6 +21,7 @@ public sealed class GetAuthorByIdEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        Guid id,
         [FromBody] GetAuthorByIdQuery query,
         IValidator<GetAuthorByIdQuery> validator,
         ContentHubDbContext db,
@@ -29,7 +30,14 @@ public sealed class GetAuthorByIdEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (id != query.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
         }
 
         var author = await db.Authors

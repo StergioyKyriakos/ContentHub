@@ -19,6 +19,16 @@ public static class AuthErrors
             code: "auth.invalid_credentials",
             message: "Invalid email, username, or password.");
 
+    public static ApiError LoginRateLimited =>
+        ApiError.Create(
+            code: "auth.login_rate_limited",
+            message: "Too many failed login attempts. Please try again later.");
+
+    public static ApiError EmailDeliveryFailed =>
+        ApiError.Create(
+            code: "auth.email_delivery_failed",
+            message: "The account was saved, but the email could not be sent. Please request a new email later.");
+
     public static ApiError InvalidRefreshToken =>
         ApiError.Create(
             code: "auth.invalid_refresh_token",

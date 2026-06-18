@@ -30,7 +30,7 @@ public sealed class GetPublishedPostsEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
         }
 
         IQueryable<Post> dbQuery = db.Posts
@@ -50,8 +50,7 @@ public sealed class GetPublishedPostsEndpoint : IEndpointDefinition
 
         if (query.AuthorId.HasValue)
         {
-            dbQuery = dbQuery.Where(post => post.Authors.Any(a => a.AuthorId == query.AuthorId.Value) || 
-                                            post.CreatedById == query.AuthorId.Value);
+            dbQuery = dbQuery.Where(post => post.Authors.Any(a => a.AuthorId == query.AuthorId.Value));
         }
 
         if (query.IsFeatured.HasValue)

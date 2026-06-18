@@ -3,9 +3,11 @@ using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Common.Filters;
 using ContentHub.Api.Features.Auth.Shared;
 using ContentHub.Application.Abstractions.Authentication;
+using ContentHub.Application.Abstractions.RateLimiting;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
+using ContentHub.Infrastructure.RateLimiting;
 using ContentHub.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -31,13 +33,34 @@ public sealed class LoginEndpoint : IEndpointDefinition
         IJwtTokenGenerator jwtTokenGenerator,
         IRefreshTokenGenerator refreshTokenGenerator,
         IOptions<JwtOptions> jwtOptions,
+        IOptions<RateLimitOptions> rateLimitOptions,
         IPermissionService permissionService,
+        IRateLimitService rateLimitService,
+        RateLimitKeyBuilder rateLimitKeyBuilder,
         AuditLogWriter auditLogWriter,
         HttpContext httpContext,
 
         CancellationToken ct)
     {
         var normalizedValue = request.EmailOrUsername.ToUpperInvariant();
+        var loginRateLimit = rateLimitOptions.Value.Login;
+        var rateLimitWindow = TimeSpan.FromMinutes(loginRateLimit.WindowMinutes);
+        var rateLimitKey = rateLimitKeyBuilder.BuildLoginKey(
+            request.EmailOrUsername,
+            httpContext.Connection.RemoteIpAddress?.ToString());
+
+        var currentLimit = await rateLimitService.CheckAsync(
+            rateLimitKey,
+            loginRateLimit.MaxFailedAttempts,
+            rateLimitWindow,
+            ct);
+
+        if (currentLimit.IsLimited)
+        {
+            return Results.Json(
+                ApiResponse<object>.Fail(AuthErrors.LoginRateLimited),
+                statusCode: StatusCodes.Status429TooManyRequests);
+        }
 
         var user = await db.Users
             .Include(user => user.RefreshTokens)
@@ -48,6 +71,12 @@ public sealed class LoginEndpoint : IEndpointDefinition
 
         if (user is null)
         {
+            await rateLimitService.IncrementAsync(
+                rateLimitKey,
+                loginRateLimit.MaxFailedAttempts,
+                rateLimitWindow,
+                ct);
+
             return Results.Json(
                 ApiResponse<object>.Fail(AuthErrors.InvalidCredentials),
                 statusCode: StatusCodes.Status401Unauthorized);
@@ -66,10 +95,18 @@ public sealed class LoginEndpoint : IEndpointDefinition
 
         if (!passwordValid)
         {
+            await rateLimitService.IncrementAsync(
+                rateLimitKey,
+                loginRateLimit.MaxFailedAttempts,
+                rateLimitWindow,
+                ct);
+
             return Results.Json(
                 ApiResponse<object>.Fail(AuthErrors.InvalidCredentials),
                 statusCode: StatusCodes.Status401Unauthorized);
         }
+
+        await rateLimitService.ResetAsync(rateLimitKey, ct);
 
         var roles = await permissionService.GetRolesAsync(user.Id, ct);
 

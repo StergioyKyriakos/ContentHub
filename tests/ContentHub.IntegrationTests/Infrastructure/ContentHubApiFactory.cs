@@ -12,10 +12,14 @@ namespace ContentHub.IntegrationTests.Infrastructure;
 public sealed class ContentHubApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly DatabaseFixture _databaseFixture;
+    private readonly ContentHubApiFactoryOptions _options;
 
-    public ContentHubApiFactory(DatabaseFixture databaseFixture)
+    public ContentHubApiFactory(
+        DatabaseFixture databaseFixture,
+        ContentHubApiFactoryOptions? options = null)
     {
         _databaseFixture = databaseFixture;
+        _options = options ?? new ContentHubApiFactoryOptions();
 
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
 
@@ -36,6 +40,9 @@ public sealed class ContentHubApiFactory : WebApplicationFactory<Program>, IAsyn
         Environment.SetEnvironmentVariable("Storage__AllowedContentTypes__2", "image/webp");
         Environment.SetEnvironmentVariable("Storage__AllowedContentTypes__3", "image/gif");
         Environment.SetEnvironmentVariable("Storage__AllowedContentTypes__4", "application/pdf");
+
+        Environment.SetEnvironmentVariable("Redis__Enabled", _options.RedisEnabled ? "true" : "false");
+        Environment.SetEnvironmentVariable("BackgroundJobs__Enabled", _options.BackgroundJobsEnabled ? "true" : "false");
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -54,6 +61,8 @@ public sealed class ContentHubApiFactory : WebApplicationFactory<Program>, IAsyn
                 ["Jwt:ExpirationMinutes"] = "60",
                 ["Jwt:RefreshTokenExpirationDays"] = "30",
 
+                ["Seed:Admin:Password"] = TestConstants.DefaultPassword,
+
                 ["Storage:Provider"] = "Local",
                 ["Storage:LocalRootPath"] = "storage/test-assets",
                 ["Storage:PublicBaseUrl"] = "/assets",
@@ -62,7 +71,16 @@ public sealed class ContentHubApiFactory : WebApplicationFactory<Program>, IAsyn
                 ["Storage:AllowedContentTypes:1"] = "image/png",
                 ["Storage:AllowedContentTypes:2"] = "image/webp",
                 ["Storage:AllowedContentTypes:3"] = "image/gif",
-                ["Storage:AllowedContentTypes:4"] = "application/pdf"
+                ["Storage:AllowedContentTypes:4"] = "application/pdf",
+
+                ["Redis:Enabled"] = _options.RedisEnabled ? "true" : "false",
+                ["BackgroundJobs:Enabled"] = _options.BackgroundJobsEnabled ? "true" : "false",
+                ["BackgroundJobs:ScheduledPostPublisher:Enabled"] = _options.BackgroundJobsEnabled ? "true" : "false",
+                ["BackgroundJobs:ScheduledPostPublisher:IntervalSeconds"] = _options.ScheduledPostPublisherIntervalSeconds.ToString(),
+                ["BackgroundJobs:NotificationDelivery:Enabled"] = _options.BackgroundJobsEnabled ? "true" : "false",
+                ["BackgroundJobs:NotificationDelivery:IntervalSeconds"] = _options.NotificationDeliveryIntervalSeconds.ToString(),
+                ["BackgroundJobs:ExpiredTokenCleanup:Enabled"] = _options.BackgroundJobsEnabled ? "true" : "false",
+                ["BackgroundJobs:ExpiredTokenCleanup:IntervalMinutes"] = _options.ExpiredTokenCleanupIntervalMinutes.ToString()
             });
         });
 

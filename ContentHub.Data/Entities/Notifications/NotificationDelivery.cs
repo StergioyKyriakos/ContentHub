@@ -37,11 +37,14 @@ public sealed class NotificationDelivery : Entity
 
     public void MarkDelivered()
     {
+        Status = NotificationStatus.Sent;
         DeliveredAtUtc = DateTime.UtcNow;
+        ErrorMessage = null;
     }
 
     public void MarkFailed(string errorMessage)
     {
+        Status = NotificationStatus.Failed;
         ErrorMessage = errorMessage;
     }
 }

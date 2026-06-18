@@ -32,20 +32,18 @@ public sealed class SearchAssetsEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
         }
 
         IQueryable<Asset> assetsQuery = db.Assets.AsNoTracking();
 
-        if (!string.IsNullOrWhiteSpace(query.Q))
-        {
-            var pattern = $"%{query.Q.Trim()}%";
+        var hasSearch = !string.IsNullOrWhiteSpace(query.Q);
+        var searchText = query.Q?.Trim();
 
-            assetsQuery = assetsQuery.Where(asset =>
-                EF.Functions.ILike(asset.FileName, pattern) ||
-                EF.Functions.ILike(asset.OriginalFileName, pattern) ||
-                EF.Functions.ILike(asset.ContentType, pattern) ||
-                EF.Functions.ILike(asset.StoragePath, pattern));
+        if (hasSearch)
+        {
+            assetsQuery = assetsQuery.Where(asset => asset.SearchVector.Matches(
+                EF.Functions.WebSearchToTsQuery("simple", searchText!)));
         }
 
         if (query.Type.HasValue)
@@ -66,7 +64,12 @@ public sealed class SearchAssetsEndpoint : IEndpointDefinition
                 EF.Functions.ILike(asset.ContentType, pattern));
         }
 
-        assetsQuery = ApplySorting(assetsQuery, query.SortBy, query.SortDirection);
+        assetsQuery = ApplySorting(
+            assetsQuery,
+            query.SortBy,
+            query.SortDirection,
+            hasSearch,
+            searchText);
 
         var totalItems = await assetsQuery.CountAsync(ct);
 
@@ -81,6 +84,7 @@ public sealed class SearchAssetsEndpoint : IEndpointDefinition
                 asset.ContentType,
                 asset.Size,
                 asset.StoragePath,
+                asset.Provider,
                 asset.Type,
                 asset.Visibility,
                 asset.CreatedAtUtc
@@ -95,7 +99,7 @@ public sealed class SearchAssetsEndpoint : IEndpointDefinition
                 OriginalFileName = asset.OriginalFileName,
                 ContentType = asset.ContentType,
                 Size = asset.Size,
-                Url = fileUrlResolver.ResolveUrl(asset.StoragePath),
+                Url = fileUrlResolver.ResolveUrl(asset.StoragePath, asset.Provider),
                 Type = asset.Type,
                 Visibility = asset.Visibility,
                 CreatedAtUtc = asset.CreatedAtUtc
@@ -117,14 +121,26 @@ public sealed class SearchAssetsEndpoint : IEndpointDefinition
     private static IQueryable<Asset> ApplySorting(
         IQueryable<Asset> query,
         string? sortBy,
-        string? sortDirection)
+        string? sortDirection,
+        bool hasSearch,
+        string? searchText)
     {
+        var sortField = sortBy?.ToLowerInvariant();
+
+        if (hasSearch && IsRelevanceSort(sortField))
+        {
+            return query
+                .OrderByDescending(asset => asset.SearchVector.Rank(
+                    EF.Functions.WebSearchToTsQuery("simple", searchText!)))
+                .ThenByDescending(asset => asset.CreatedAtUtc);
+        }
+
         var descending = !string.Equals(
             sortDirection,
             "asc",
             StringComparison.OrdinalIgnoreCase);
 
-        return sortBy?.ToLowerInvariant() switch
+        return sortField switch
         {
             "filename" => descending
                 ? query.OrderByDescending(asset => asset.FileName)
@@ -150,5 +166,11 @@ public sealed class SearchAssetsEndpoint : IEndpointDefinition
                 ? query.OrderByDescending(asset => asset.CreatedAtUtc)
                 : query.OrderBy(asset => asset.CreatedAtUtc)
         };
+    }
+
+    private static bool IsRelevanceSort(string? sortField)
+    {
+        return string.IsNullOrWhiteSpace(sortField) ||
+               sortField is "relevance" or "createdat";
     }
 }

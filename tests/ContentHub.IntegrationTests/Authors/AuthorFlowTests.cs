@@ -103,6 +103,38 @@ public sealed class AuthorFlowTests : IntegrationTestBase
 
         updateBody.Should().Contain(updatedName);
 
+        var categoryId = await Cms.CreateCategoryAsync();
+        var title = $"Author Post {faker.Random.Guid()}";
+        var postSlug = title.ToLowerInvariant().Replace(" ", "-");
+
+        var createPostResponse = await Client.PostAsJsonAsync("/api/posts", new
+        {
+            title,
+            slug = postSlug,
+            summary = faker.Lorem.Sentence(),
+            content = faker.Lorem.Paragraphs(3),
+            coverAssetId = (Guid?)null,
+            categoryIds = new[] { categoryId },
+            authorIds = new[] { authorId },
+            tags = new[] { "author", "coverage" }
+        });
+
+        createPostResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        await LogResponseAsync(createPostResponse, "POST /api/posts response:");
+
+        var createPostBody = await createPostResponse.Content.ReadFromJsonAsync<TestApiResponse<CreatePostData>>();
+        var postId = createPostBody!.Data!.Post.Id;
+
+        var publishResponse = await Client.PostAsJsonAsync($"/api/posts/{postId}/publish", new
+        {
+            id = postId
+        });
+
+        publishResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        await LogResponseAsync(publishResponse, $"POST /api/posts/{postId}/publish response:");
+
         var postsResponse = await GetAsJsonAsync($"/api/authors/{authorId}/posts", new
         {
             id = authorId
@@ -110,9 +142,14 @@ public sealed class AuthorFlowTests : IntegrationTestBase
 
         postsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        await LogResponseAsync(postsResponse, $"GET /api/authors/{authorId}/posts response:");
+        var postsBody = await LogResponseAsync(postsResponse, $"GET /api/authors/{authorId}/posts response:");
 
-        var deleteResponse = await Client.DeleteAsync($"/api/authors/{authorId}");
+        postsBody.Should().Contain(title);
+
+        var deleteResponse = await DeleteAsJsonAsync($"/api/authors/{authorId}", new
+        {
+            id = authorId
+        });
 
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -125,6 +162,16 @@ public sealed class AuthorFlowTests : IntegrationTestBase
     }
 
     private sealed class AuthorData
+    {
+        public Guid Id { get; init; }
+    }
+
+    private sealed class CreatePostData
+    {
+        public PostData Post { get; init; } = default!;
+    }
+
+    private sealed class PostData
     {
         public Guid Id { get; init; }
     }

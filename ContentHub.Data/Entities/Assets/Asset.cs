@@ -2,6 +2,7 @@ using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using NpgsqlTypes;
 
 namespace ContentHub.Data.Entities.Assets;
 
@@ -56,6 +57,8 @@ public sealed class Asset : AggregateRoot
     public AssetType Type { get; set; }
 
     public Guid UploadedById { get; set; }
+
+    public NpgsqlTsVector SearchVector { get; private set; } = null!;
 
     public IReadOnlyCollection<AssetVersion> Versions => _versions.AsReadOnly();
 
@@ -138,6 +141,17 @@ public sealed class AssetConfiguration : IEntityTypeConfiguration<Asset>
         builder.Property(asset => asset.UploadedById)
             .IsRequired();
 
+        builder.Property(asset => asset.SearchVector)
+            .HasColumnType("tsvector")
+            .HasComputedColumnSql(
+                """
+                setweight(to_tsvector('simple', coalesce("OriginalFileName", '')), 'A') ||
+                setweight(to_tsvector('simple', coalesce("FileName", '')), 'B') ||
+                setweight(to_tsvector('simple', coalesce("ContentType", '')), 'B') ||
+                setweight(to_tsvector('simple', coalesce("StoragePath", '')), 'C')
+                """,
+                stored: true);
+
         builder.Property(asset => asset.CreatedAtUtc)
             .IsRequired();
 
@@ -155,6 +169,9 @@ public sealed class AssetConfiguration : IEntityTypeConfiguration<Asset>
         builder.HasIndex(asset => asset.Type);
 
         builder.HasIndex(asset => asset.Visibility);
+
+        builder.HasIndex(asset => asset.SearchVector)
+            .HasMethod("GIN");
 
         builder.HasQueryFilter(asset => !asset.IsDeleted);
 

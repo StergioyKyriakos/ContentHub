@@ -33,6 +33,8 @@ public sealed class ResetPasswordEndpoint : IEndpointDefinition
         var resetToken = await db.PasswordResetTokens
             .Include(token => token.User)
             .ThenInclude(user => user.RefreshTokens)
+            .Include(token => token.User)
+            .ThenInclude(user => user.Sessions)
             .FirstOrDefaultAsync(token =>
                 token.TokenHash == tokenHash &&
                 token.User.NormalizedEmail == normalizedEmail,
@@ -58,6 +60,11 @@ public sealed class ResetPasswordEndpoint : IEndpointDefinition
         foreach (var refreshToken in user.RefreshTokens.Where(token => token.IsActive))
         {
             refreshToken.Revoke();
+        }
+
+        foreach (var session in user.Sessions.Where(session => session.IsActive))
+        {
+            session.Revoke();
         }
 
         await db.SaveChangesAsync(ct);

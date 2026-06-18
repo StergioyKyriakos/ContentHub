@@ -9,6 +9,7 @@ public sealed class UploadAssetCommandValidator : AbstractValidator<UploadAssetC
     public UploadAssetCommandValidator(IOptions<StorageOptions> storageOptions)
     {
         RuleFor(x => x.File)
+            .Cascade(CascadeMode.Stop)
             .NotNull().WithMessage("File is required.")
             .Must(file => file.Length > 0).WithMessage("File cannot be empty.");
 

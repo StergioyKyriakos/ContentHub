@@ -26,6 +26,7 @@ public sealed class ForgotPasswordEndpoint : IEndpointDefinition
         ISecurityTokenGenerator securityTokenGenerator,
         IAuthEmailSender authEmailSender,
         HttpContext httpContext,
+        ILogger<ForgotPasswordEndpoint> logger,
         CancellationToken ct)
     {
         var response = new ForgotPasswordResponse
@@ -59,7 +60,18 @@ public sealed class ForgotPasswordEndpoint : IEndpointDefinition
             ipAddress: httpContext.Connection.RemoteIpAddress?.ToString());
 
         await db.SaveChangesAsync(ct);
-        await authEmailSender.SendPasswordResetAsync(user, token, ct);
+        try
+        {
+            await authEmailSender.SendPasswordResetAsync(user, token, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Password reset email delivery failed for user {UserId}.", user.Id);
+        }
 
         return Results.Ok(ApiResponse<ForgotPasswordResponse>.Ok(response));
     }

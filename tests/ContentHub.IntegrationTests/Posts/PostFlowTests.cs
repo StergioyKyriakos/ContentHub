@@ -265,16 +265,6 @@ public sealed class PostFlowTests : IntegrationTestBase
         return body!.Data!.Category.Id;
     }
 
-    private Task<HttpResponseMessage> DeleteAsJsonAsync(string url, object body)
-    {
-        var request = new HttpRequestMessage(HttpMethod.Delete, url)
-        {
-            Content = JsonContent.Create(body)
-        };
-
-        return Client.SendAsync(request);
-    }
-
     private async Task<Guid> CreateAuthorAsync(Faker faker)
     {
         var displayName = faker.Name.FullName();

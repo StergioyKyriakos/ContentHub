@@ -1,7 +1,9 @@
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.Authors.Shared;
 using ContentHub.Data.Dtos.Common;
+using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Entities.Common;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
@@ -20,6 +22,7 @@ public sealed class GetAuthorPostsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        Guid id,
         [FromBody] GetAuthorPostsQuery query,
         IValidator<GetAuthorPostsQuery> validator,
         ContentHubDbContext db,
@@ -28,7 +31,14 @@ public sealed class GetAuthorPostsEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (id != query.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
         }
 
         var authorExists = await db.Authors
@@ -40,10 +50,27 @@ public sealed class GetAuthorPostsEndpoint : IEndpointDefinition
             return Results.NotFound(ApiResponse<DomainError>.Fail(AuthorErrors.NotFound));
         }
 
+        var posts = await db.Posts
+            .AsNoTracking()
+            .Where(post => post.Status == PostStatus.Published)
+            .Where(post => post.Authors.Any(author => author.AuthorId == query.Id))
+            .OrderByDescending(post => post.PublishedAtUtc)
+            .Select(post => new PostSummaryDto
+            {
+                Id = post.Id,
+                Title = post.Title,
+                Slug = post.Slug,
+                Summary = post.Summary,
+                IsFeatured = post.IsFeatured,
+                PublishedAtUtc = post.PublishedAtUtc,
+                CoverAssetId = post.CoverAssetId
+            })
+            .ToListAsync(ct);
+
         var response = new GetAuthorPostsResponse
         {
             AuthorId = query.Id,
-            Posts = []
+            Posts = posts
         };
 
         return Results.Ok(ApiResponse<GetAuthorPostsResponse>.Ok(response));

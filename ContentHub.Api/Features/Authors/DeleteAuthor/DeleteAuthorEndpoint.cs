@@ -6,6 +6,8 @@ using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
+using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ContentHub.Api.Features.Authors.DeleteAuthor;
@@ -22,12 +24,27 @@ public sealed class DeleteAuthorEndpoint : IEndpointDefinition
 
     private static async Task<IResult> Handle(
         Guid id,
+        [FromBody] DeleteAuthorCommand command,
+        IValidator<DeleteAuthorCommand> validator,
         ContentHubDbContext db,
         AuditLogWriter auditLogWriter,
         CancellationToken ct)
     {
+        var validationResult = await validator.ValidateAsync(command, ct);
+        if (!validationResult.IsValid)
+        {
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (id != command.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
+        }
+
         var author = await db.Authors
-            .FirstOrDefaultAsync(author => author.Id == id, ct);
+            .FirstOrDefaultAsync(author => author.Id == command.Id, ct);
 
         if (author is null)
         {

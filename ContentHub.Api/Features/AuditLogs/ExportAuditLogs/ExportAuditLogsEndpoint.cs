@@ -2,6 +2,7 @@ using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.AuditLogs.Shared;
 using ContentHub.Application.Common.Security;
 using ContentHub.Data.Persistence;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,72 +19,84 @@ public sealed class ExportAuditLogsEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
-        [FromBody] ExportAuditLogsCommand query,
+        [FromBody] ExportAuditLogsCommand command,
+        IValidator<ExportAuditLogsCommand> validator,
         ContentHubDbContext db,
         CancellationToken ct)
     {
+        var validationResult = await validator.ValidateAsync(command, ct);
+        if (!validationResult.IsValid)
+        {
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
         var auditLogsQuery = db.AuditLogs
             .AsNoTracking()
             .AsQueryable();
 
-        if (query.ActorUserId.HasValue)
+        if (command.ActorUserId.HasValue)
         {
             auditLogsQuery = auditLogsQuery
-                .Where(log => log.ActorUserId == query.ActorUserId.Value);
+                .Where(log => log.ActorUserId == command.ActorUserId.Value);
         }
 
-        if (query.Action.HasValue)
+        if (command.Action.HasValue)
         {
             auditLogsQuery = auditLogsQuery
-                .Where(log => log.Action == query.Action.Value);
+                .Where(log => log.Action == command.Action.Value);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.EntityName))
+        if (!string.IsNullOrWhiteSpace(command.EntityName))
         {
-            var entityName = query.EntityName.Trim();
+            var entityName = command.EntityName.Trim();
 
             auditLogsQuery = auditLogsQuery
                 .Where(log => log.EntityName == entityName);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.EntityId))
+        if (!string.IsNullOrWhiteSpace(command.EntityId))
         {
-            var entityId = query.EntityId.Trim();
+            var entityId = command.EntityId.Trim();
 
             auditLogsQuery = auditLogsQuery
                 .Where(log => log.EntityId == entityId);
         }
 
-        if (query.From.HasValue)
+        if (command.From.HasValue)
         {
             auditLogsQuery = auditLogsQuery
-                .Where(log => log.CreatedAtUtc >= query.From.Value);
+                .Where(log => log.CreatedAtUtc >= command.From.Value);
         }
 
-        if (query.To.HasValue)
+        if (command.To.HasValue)
         {
             auditLogsQuery = auditLogsQuery
-                .Where(log => log.CreatedAtUtc <= query.To.Value);
+                .Where(log => log.CreatedAtUtc <= command.To.Value);
         }
 
         var items = await auditLogsQuery
             .OrderByDescending(log => log.CreatedAtUtc)
             .Take(10_000)
-            .Select(log => new
+            .Select(log => new ExportAuditLogItemResponse
             {
-                log.Id,
-                log.ActorUserId,
+                Id = log.Id,
+                ActorUserId = log.ActorUserId,
                 Action = log.Action.ToString(),
-                log.EntityName,
-                log.EntityId,
-                log.OldValuesJson,
-                log.NewValuesJson,
-                log.IpAddress,
-                log.UserAgent,
-                log.CreatedAtUtc
+                EntityName = log.EntityName,
+                EntityId = log.EntityId,
+                OldValuesJson = log.OldValuesJson,
+                NewValuesJson = log.NewValuesJson,
+                IpAddress = log.IpAddress,
+                UserAgent = log.UserAgent,
+                CreatedAtUtc = log.CreatedAtUtc
             })
             .ToListAsync(ct);
 
-        return Results.Ok(items);
+        var response = new ExportAuditLogsResponse
+        {
+            Items = items
+        };
+
+        return ResultsFactory.Ok(response);
     }
 }

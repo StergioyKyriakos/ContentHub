@@ -19,7 +19,8 @@ public sealed class SearchFlowTests : IntegrationTestBase
     {
         var response = await GetAsJsonAsync("/api/search/posts", new
         {
-            q = "test"
+            q = "test",
+            sortBy = "relevance"
         });
 
         await LogResponseAsync(response, "GET /api/search/posts?q=test response:");
@@ -35,7 +36,8 @@ public sealed class SearchFlowTests : IntegrationTestBase
 
         var response = await GetAsJsonAsync("/api/search/assets", new
         {
-            q = "test"
+            q = "test",
+            sortBy = "relevance"
         });
 
         await LogResponseAsync(response, "GET /api/search/assets?q=test response:");

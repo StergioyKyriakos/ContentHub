@@ -32,6 +32,7 @@ public sealed class RegisterEndpoint : IEndpointDefinition
         IAuthEmailSender authEmailSender,
         AuditLogWriter auditLogWriter,
         HttpContext httpContext,
+        ILogger<RegisterEndpoint> logger,
         CancellationToken ct)
     {
         var normalizedEmail = request.Email.ToUpperInvariant();
@@ -87,7 +88,22 @@ public sealed class RegisterEndpoint : IEndpointDefinition
             });
 
         await db.SaveChangesAsync(ct);
-        await authEmailSender.SendEmailVerificationAsync(user, verificationToken, ct);
+        try
+        {
+            await authEmailSender.SendEmailVerificationAsync(user, verificationToken, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Email verification delivery failed for user {UserId}.", user.Id);
+
+            return Results.Json(
+                ApiResponse<object>.Fail(AuthErrors.EmailDeliveryFailed),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
 
         var response = new RegisterResponse
         {

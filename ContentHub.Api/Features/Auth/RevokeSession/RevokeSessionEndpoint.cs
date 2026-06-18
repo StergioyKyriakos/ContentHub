@@ -21,6 +21,7 @@ public sealed class RevokeSessionEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        Guid id,
         [FromBody] RevokeSessionCommand command,
         ICurrentUserProvider currentUser,
         ContentHubDbContext db,
@@ -28,7 +29,14 @@ public sealed class RevokeSessionEndpoint : IEndpointDefinition
     {
         if (currentUser.UserId is null)
         {
-            return Results.Unauthorized();
+            return ResultsFactory.Unauthorized();
+        }
+
+        if (id != command.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
         }
 
         var session = await db.UserSessions

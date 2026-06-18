@@ -30,7 +30,7 @@ public sealed class SearchPostsEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
         }
 
         IQueryable<Post> dbQuery = db.Posts.AsNoTracking();
@@ -47,11 +47,13 @@ public sealed class SearchPostsEndpoint : IEndpointDefinition
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(query.Q))
+        var hasSearch = !string.IsNullOrWhiteSpace(query.Q);
+        var searchText = query.Q?.Trim();
+
+        if (hasSearch)
         {
-            var searchKeyword = query.Q.Trim().ToLowerInvariant();
-            dbQuery = dbQuery.Where(post => post.Title.ToLower().Contains(searchKeyword) || 
-                                            post.Summary!.ToLower().Contains(searchKeyword));
+            dbQuery = dbQuery.Where(post => post.SearchVector.Matches(
+                EF.Functions.WebSearchToTsQuery("english", searchText!)));
         }
 
         if (query.CategoryId.HasValue)
@@ -61,8 +63,7 @@ public sealed class SearchPostsEndpoint : IEndpointDefinition
 
         if (query.AuthorId.HasValue)
         {
-            dbQuery = dbQuery.Where(post => post.Authors.Any(a => a.AuthorId == query.AuthorId.Value) || 
-                                            post.CreatedById == query.AuthorId.Value);
+            dbQuery = dbQuery.Where(post => post.Authors.Any(a => a.AuthorId == query.AuthorId.Value));
         }
 
         if (query.IsFeatured.HasValue)
@@ -85,17 +86,28 @@ public sealed class SearchPostsEndpoint : IEndpointDefinition
         var sortField = query.SortBy?.Trim().ToLowerInvariant();
         var isDescending = query.SortDirection?.Trim().Equals("desc", StringComparison.OrdinalIgnoreCase) ?? true;
 
-        Expression<Func<Post, object>> sortExpression = sortField switch
+        if (hasSearch && IsRelevanceSort(sortField))
         {
-            "title" => post => post.Title,
-            "createdat" => post => post.CreatedAtUtc,
-            "isfeatured" => post => post.IsFeatured,
-            _ => post => post.PublishedAtUtc!
-        };
+            dbQuery = dbQuery
+                .OrderByDescending(post => post.SearchVector.Rank(
+                    EF.Functions.WebSearchToTsQuery("english", searchText!)))
+                .ThenByDescending(post => post.PublishedAtUtc)
+                .ThenByDescending(post => post.CreatedAtUtc);
+        }
+        else
+        {
+            Expression<Func<Post, object>> sortExpression = sortField switch
+            {
+                "title" => post => post.Title,
+                "createdat" => post => post.CreatedAtUtc,
+                "isfeatured" => post => post.IsFeatured,
+                _ => post => post.PublishedAtUtc!
+            };
 
-        dbQuery = isDescending 
-            ? dbQuery.OrderByDescending(sortExpression) 
-            : dbQuery.OrderBy(sortExpression);
+            dbQuery = isDescending
+                ? dbQuery.OrderByDescending(sortExpression)
+                : dbQuery.OrderBy(sortExpression);
+        }
 
         var posts = await dbQuery
             .Skip((query.Page - 1) * query.PageSize)
@@ -122,5 +134,11 @@ public sealed class SearchPostsEndpoint : IEndpointDefinition
         };
 
         return Results.Ok(ApiResponse<SearchPostsResponse>.Ok(response));
+    }
+
+    private static bool IsRelevanceSort(string? sortField)
+    {
+        return string.IsNullOrWhiteSpace(sortField) ||
+               sortField is "relevance" or "publishedat";
     }
 }

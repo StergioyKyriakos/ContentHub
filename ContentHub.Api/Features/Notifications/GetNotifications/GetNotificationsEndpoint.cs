@@ -39,7 +39,7 @@ public sealed class GetNotificationsEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
         }
 
         IQueryable<Notification> notificationsQuery = db.Notifications

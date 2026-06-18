@@ -23,6 +23,8 @@ public sealed class DetachAssetFromPostEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        Guid postId,
+        Guid assetId,
         [FromBody] DetachAssetFromPostCommand command,
         IValidator<DetachAssetFromPostCommand> validator,
         ContentHubDbContext db,
@@ -32,7 +34,14 @@ public sealed class DetachAssetFromPostEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(command, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (postId != command.PostId || assetId != command.AssetId)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route ids and body ids must match.");
         }
 
         var post = await db.Posts

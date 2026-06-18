@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
 
 #nullable disable
 
@@ -61,6 +62,12 @@ namespace ContentHub.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasComputedColumnSql("setweight(to_tsvector('simple', coalesce(\"OriginalFileName\", '')), 'A') ||\nsetweight(to_tsvector('simple', coalesce(\"FileName\", '')), 'B') ||\nsetweight(to_tsvector('simple', coalesce(\"ContentType\", '')), 'B') ||\nsetweight(to_tsvector('simple', coalesce(\"StoragePath\", '')), 'C')", true);
+
                     b.Property<long>("Size")
                         .HasColumnType("bigint");
 
@@ -88,6 +95,10 @@ namespace ContentHub.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Hash");
+
+                    b.HasIndex("SearchVector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
 
                     b.HasIndex("Type");
 
@@ -486,6 +497,12 @@ namespace ContentHub.Data.Migrations
                     b.Property<DateTime?>("ScheduledForUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasComputedColumnSql("setweight(to_tsvector('english', coalesce(\"Title\", '')), 'A') ||\nsetweight(to_tsvector('english', coalesce(\"Slug\", '')), 'A') ||\nsetweight(to_tsvector('english', coalesce(\"Summary\", '')), 'B') ||\nsetweight(to_tsvector('english', coalesce(\"Content\", '')), 'C')", true);
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(280)
@@ -516,6 +533,10 @@ namespace ContentHub.Data.Migrations
                     b.HasIndex("IsFeatured");
 
                     b.HasIndex("PublishedAtUtc");
+
+                    b.HasIndex("SearchVector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
 
                     b.HasIndex("Slug")
                         .IsUnique();

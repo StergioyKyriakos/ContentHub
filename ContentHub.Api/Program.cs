@@ -22,15 +22,31 @@ builder.Services.AddEndpointDefinitions(Assembly.GetExecutingAssembly());
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+var applyMigrationsOnStartup = app.Configuration.GetValue(
+    "Database:ApplyMigrationsOnStartup",
+    true);
+
+var seedOnStartup = app.Configuration.GetValue(
+    "Database:SeedOnStartup",
+    true);
+
+if (applyMigrationsOnStartup || seedOnStartup)
 {
+    using var scope = app.Services.CreateScope();
+
     var db = scope.ServiceProvider.GetRequiredService<ContentHubDbContext>();
 
-    await db.Database.MigrateAsync();
+    if (applyMigrationsOnStartup)
+    {
+        await db.Database.MigrateAsync();
+    }
 
-    var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
+    if (seedOnStartup)
+    {
+        var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
 
-    await seeder.SeedAsync(db);
+        await seeder.SeedAsync(db);
+    }
 }
 
 app.UseContentHubMiddleware();
@@ -39,17 +55,25 @@ app.UseContentHubSwagger();
 
 app.UseHttpsRedirection();
 
+var storageRootPath =
+    app.Configuration["Storage:LocalRootPath"] ??
+    app.Configuration["Storage:RootPath"] ??
+    "storage/assets";
+
 var storagePath = Path.Combine(
     Directory.GetCurrentDirectory(),
-    "storage",
-    "assets");
+    storageRootPath);
+
+var storagePublicBaseUrl =
+    app.Configuration["Storage:PublicBaseUrl"] ??
+    "/assets";
 
 Directory.CreateDirectory(storagePath);
 
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(storagePath),
-    RequestPath = "/assets"
+    RequestPath = ResolveStorageRequestPath(storagePublicBaseUrl)
 });
 
 app.UseAuthentication();
@@ -60,3 +84,23 @@ app.MapContentHubHealthChecks();
 app.MapEndpoints();
 
 app.Run();
+
+static string ResolveStorageRequestPath(string publicBaseUrl)
+{
+    if (Uri.TryCreate(publicBaseUrl, UriKind.Absolute, out var absoluteUri) &&
+        !string.IsNullOrWhiteSpace(absoluteUri.AbsolutePath))
+    {
+        return absoluteUri.AbsolutePath.TrimEnd('/');
+    }
+
+    var normalized = publicBaseUrl.TrimEnd('/');
+
+    if (string.IsNullOrWhiteSpace(normalized))
+    {
+        return "/assets";
+    }
+
+    return normalized.StartsWith('/')
+        ? normalized
+        : $"/{normalized}";
+}

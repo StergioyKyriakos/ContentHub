@@ -21,12 +21,16 @@ public static class ResultsFactory
         return Results.BadRequest(ApiResponse<object>.Fail(error));
     }
 
-    public static IResult ValidationProblem(Dictionary<string, string[]> errors)
+    public static IResult ValidationProblem(IDictionary<string, string[]> errors)
     {
+        var details = errors.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value);
+
         var error = ApiError.Create(
             code: "validation_failed",
             message: "One or more validation errors occurred.",
-            details: errors);
+            details: details);
 
         return Results.BadRequest(ApiResponse<object>.Fail(error));
     }

@@ -113,16 +113,6 @@ public sealed class AssetFlowTests : IntegrationTestBase
         return body.Data!.Asset.Id;
     }
 
-    private Task<HttpResponseMessage> DeleteAsJsonAsync(string url, object body)
-    {
-        var request = new HttpRequestMessage(HttpMethod.Delete, url)
-        {
-            Content = JsonContent.Create(body)
-        };
-
-        return Client.SendAsync(request);
-    }
-
     private sealed class UploadAssetData
     {
         public AssetData Asset { get; init; } = default!;

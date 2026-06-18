@@ -1,7 +1,11 @@
+using System.Security.Claims;
 using System.Text;
+using ContentHub.Data.Enums;
 using ContentHub.Data.Dtos.Common;
+using ContentHub.Data.Persistence;
 using ContentHub.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 namespace ContentHub.Api.Extensions;
@@ -46,6 +50,41 @@ public static class AuthenticationExtensions
 
                 options.Events = new JwtBearerEvents
                 {
+                    OnTokenValidated = async context =>
+                    {
+                        var principal = context.Principal;
+                        var userIdValue = principal?.FindFirstValue("userId") ??
+                                          principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                        var sessionIdValue = principal?.FindFirstValue("sessionId");
+
+                        if (!Guid.TryParse(userIdValue, out var userId) ||
+                            !Guid.TryParse(sessionIdValue, out var sessionId))
+                        {
+                            context.Fail("The access token session is invalid.");
+                            return;
+                        }
+
+                        var db = context.HttpContext.RequestServices
+                            .GetRequiredService<ContentHubDbContext>();
+
+                        var now = DateTime.UtcNow;
+
+                        var sessionIsActive = await db.UserSessions
+                            .AsNoTracking()
+                            .AnyAsync(session =>
+                                    session.Id == sessionId &&
+                                    session.UserId == userId &&
+                                    session.RevokedAtUtc == null &&
+                                    session.ExpiresAtUtc > now &&
+                                    session.User.Status == UserStatus.Active,
+                                context.HttpContext.RequestAborted);
+
+                        if (!sessionIsActive)
+                        {
+                            context.Fail("The access token session is no longer active.");
+                        }
+                    },
+
                     OnChallenge = async context =>
                     {
                         context.HandleResponse();

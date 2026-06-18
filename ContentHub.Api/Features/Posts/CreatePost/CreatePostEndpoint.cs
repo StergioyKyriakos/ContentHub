@@ -36,7 +36,7 @@ public sealed class CreatePostEndpoint : IEndpointDefinition
     {
         if (currentUserProvider.UserId is null)
         {
-            return Results.Unauthorized();
+            return ResultsFactory.Unauthorized();
         }
 
         var slug = string.IsNullOrWhiteSpace(request.Slug)

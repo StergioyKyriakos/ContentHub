@@ -34,7 +34,7 @@ public sealed class GetDraftPostsEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
         }
 
         IQueryable<Post> dbQuery = db.Posts
@@ -49,7 +49,7 @@ public sealed class GetDraftPostsEndpoint : IEndpointDefinition
         {
             if (currentUserProvider.UserId is null)
             {
-                return Results.Unauthorized();
+                return ResultsFactory.Unauthorized();
             }
 
             dbQuery = dbQuery.Where(post => post.CreatedById == currentUserProvider.UserId.Value);

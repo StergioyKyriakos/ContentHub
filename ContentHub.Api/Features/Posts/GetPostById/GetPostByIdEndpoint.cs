@@ -5,6 +5,7 @@ using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Entities.Common;
 using ContentHub.Data.Persistence;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,8 +21,26 @@ public sealed class GetPostByIdEndpoint : IEndpointDefinition
             .RequireAuthorization(Policies.AuthorOrEditorOrAdmin);
     }
 
-    private static async Task<IResult> Handle([FromBody] GetPostByIdQuery request, ContentHubDbContext db, CancellationToken ct)
+    private static async Task<IResult> Handle(
+        Guid id,
+        [FromBody] GetPostByIdQuery request,
+        IValidator<GetPostByIdQuery> validator,
+        ContentHubDbContext db,
+        CancellationToken ct)
     {
+        var validationResult = await validator.ValidateAsync(request, ct);
+        if (!validationResult.IsValid)
+        {
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (id != request.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
+        }
+
         var post = await db.Posts
             .AsNoTracking()
             .Include(post => post.Tags)

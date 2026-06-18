@@ -23,6 +23,7 @@ public sealed class GetAuditLogByIdEndpoint : IEndpointDefinition
     }
 
     private static async Task<IResult> Handle(
+        Guid id,
         [FromBody] GetAuditLogByIdQuery query,
         IValidator<GetAuditLogByIdQuery> validator,
         ContentHubDbContext db,
@@ -31,7 +32,14 @@ public sealed class GetAuditLogByIdEndpoint : IEndpointDefinition
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
-            return Results.ValidationProblem(validationResult.ToDictionary());
+            return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (id != query.Id)
+        {
+            return ResultsFactory.BadRequest(
+                "request.route_body_mismatch",
+                "Route id and body id must match.");
         }
 
         IQueryable<AuditLog> dbQuery = db.AuditLogs;
