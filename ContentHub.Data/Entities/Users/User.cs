@@ -13,6 +13,7 @@ public sealed class User : AggregateRoot
     private readonly List<UserSession> _sessions = [];
     private readonly List<EmailVerificationToken> _emailVerificationTokens = [];
     private readonly List<PasswordResetToken> _passwordResetTokens = [];
+    private readonly List<UserExternalLogin> _externalLogins = [];
 
     public User()
     {
@@ -35,6 +36,10 @@ public sealed class User : AggregateRoot
     }
 
     public required string Email { get; set; } 
+    
+    public bool TwoFactorEnabled { get; set; }
+
+    public string? TwoFactorSecret { get; set; }
 
     public required string NormalizedEmail { get; set; } 
 
@@ -61,6 +66,8 @@ public sealed class User : AggregateRoot
     public IReadOnlyCollection<EmailVerificationToken> EmailVerificationTokens => _emailVerificationTokens.AsReadOnly();
 
     public IReadOnlyCollection<PasswordResetToken> PasswordResetTokens => _passwordResetTokens.AsReadOnly();
+
+    public IReadOnlyCollection<UserExternalLogin> ExternalLogins => _externalLogins.AsReadOnly();
 
     public bool IsActive => Status == UserStatus.Active;
 
@@ -174,6 +181,24 @@ public sealed class User : AggregateRoot
 
         return token;
     }
+
+    public UserExternalLogin AddExternalLogin(
+        string provider,
+        string providerUserId,
+        string? email,
+        string? displayName)
+    {
+        var login = new UserExternalLogin(
+            userId: Id,
+            provider: provider,
+            providerUserId: providerUserId,
+            email: email,
+            displayName: displayName);
+
+        _externalLogins.Add(login);
+
+        return login;
+    }
 }
 
 public sealed class UserConfiguration : IEntityTypeConfiguration<User>
@@ -236,6 +261,12 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.HasIndex(user => user.NormalizedUsername)
             .IsUnique();
+        
+        builder.Property(user => user.TwoFactorEnabled)
+            .IsRequired();
+
+        builder.Property(user => user.TwoFactorSecret)
+            .HasMaxLength(200);
 
         builder.HasMany(user => user.RefreshTokens)
             .WithOne(refreshToken => refreshToken.User)
@@ -255,6 +286,11 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasMany(user => user.PasswordResetTokens)
             .WithOne(token => token.User)
             .HasForeignKey(token => token.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(user => user.ExternalLogins)
+            .WithOne(login => login.User)
+            .HasForeignKey(login => login.UserId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

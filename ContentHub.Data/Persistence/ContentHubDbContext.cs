@@ -3,6 +3,7 @@ using ContentHub.Data.Entities.AuditLogs;
 using ContentHub.Data.Entities.Authors;
 using ContentHub.Data.Entities.Categories;
 using ContentHub.Data.Entities.Notifications;
+using ContentHub.Data.Entities.Outbox;
 using ContentHub.Data.Entities.Posts;
 using ContentHub.Data.Entities.Users;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +25,7 @@ public sealed class ContentHubDbContext : DbContext
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<EmailVerificationToken> EmailVerificationTokens => Set<EmailVerificationToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<UserExternalLogin> UserExternalLogins => Set<UserExternalLogin>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Author> Authors => Set<Author>();
     public DbSet<Post> Posts => Set<Post>();
@@ -38,6 +40,7 @@ public sealed class ContentHubDbContext : DbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

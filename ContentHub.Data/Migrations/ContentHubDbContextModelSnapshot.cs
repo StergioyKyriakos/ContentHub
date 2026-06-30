@@ -66,7 +66,7 @@ namespace ContentHub.Data.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
-                        .HasComputedColumnSql("setweight(to_tsvector('simple', coalesce(\"OriginalFileName\", '')), 'A') ||\nsetweight(to_tsvector('simple', coalesce(\"FileName\", '')), 'B') ||\nsetweight(to_tsvector('simple', coalesce(\"ContentType\", '')), 'B') ||\nsetweight(to_tsvector('simple', coalesce(\"StoragePath\", '')), 'C')", true);
+                        .HasComputedColumnSql("setweight(to_tsvector('simple', coalesce(\"OriginalFileName\", '')), 'A') ||\r\nsetweight(to_tsvector('simple', coalesce(\"FileName\", '')), 'B') ||\r\nsetweight(to_tsvector('simple', coalesce(\"ContentType\", '')), 'B') ||\r\nsetweight(to_tsvector('simple', coalesce(\"StoragePath\", '')), 'C')", true);
 
                     b.Property<long>("Size")
                         .HasColumnType("bigint");
@@ -461,6 +461,52 @@ namespace ContentHub.Data.Migrations
                     b.ToTable("notification_preferences", (string)null);
                 });
 
+            modelBuilder.Entity("ContentHub.Data.Entities.Outbox.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime?>("FailedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextAttemptAtUtc");
+
+                    b.HasIndex("OccurredAtUtc");
+
+                    b.HasIndex("ProcessedAtUtc");
+
+                    b.HasIndex("Type");
+
+                    b.ToTable("outbox_messages", (string)null);
+                });
+
             modelBuilder.Entity("ContentHub.Data.Entities.Posts.Post", b =>
                 {
                     b.Property<Guid>("Id")
@@ -501,7 +547,7 @@ namespace ContentHub.Data.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
-                        .HasComputedColumnSql("setweight(to_tsvector('english', coalesce(\"Title\", '')), 'A') ||\nsetweight(to_tsvector('english', coalesce(\"Slug\", '')), 'A') ||\nsetweight(to_tsvector('english', coalesce(\"Summary\", '')), 'B') ||\nsetweight(to_tsvector('english', coalesce(\"Content\", '')), 'C')", true);
+                        .HasComputedColumnSql("setweight(to_tsvector('english', coalesce(\"Title\", '')), 'A') ||\r\nsetweight(to_tsvector('english', coalesce(\"Slug\", '')), 'A') ||\r\nsetweight(to_tsvector('english', coalesce(\"Summary\", '')), 'B') ||\r\nsetweight(to_tsvector('english', coalesce(\"Content\", '')), 'C')", true);
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -847,6 +893,13 @@ namespace ContentHub.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<bool>("TwoFactorEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("TwoFactorSecret")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -864,6 +917,45 @@ namespace ContentHub.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("ContentHub.Data.Entities.Users.UserExternalLogin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ProviderUserId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Provider", "ProviderUserId")
+                        .IsUnique();
+
+                    b.ToTable("user_external_logins", (string)null);
                 });
 
             modelBuilder.Entity("ContentHub.Data.Entities.Users.UserRole", b =>
@@ -1067,6 +1159,17 @@ namespace ContentHub.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ContentHub.Data.Entities.Users.UserExternalLogin", b =>
+                {
+                    b.HasOne("ContentHub.Data.Entities.Users.User", "User")
+                        .WithMany("ExternalLogins")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ContentHub.Data.Entities.Users.UserRole", b =>
                 {
                     b.HasOne("ContentHub.Data.Entities.Users.Role", "Role")
@@ -1133,6 +1236,8 @@ namespace ContentHub.Data.Migrations
             modelBuilder.Entity("ContentHub.Data.Entities.Users.User", b =>
                 {
                     b.Navigation("EmailVerificationTokens");
+
+                    b.Navigation("ExternalLogins");
 
                     b.Navigation("PasswordResetTokens");
 

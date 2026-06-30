@@ -108,9 +108,16 @@ public sealed class LoginEndpoint : IEndpointDefinition
 
         await rateLimitService.ResetAsync(rateLimitKey, ct);
 
-        var roles = await permissionService.GetRolesAsync(user.Id, ct);
+        if (user.TwoFactorEnabled)
+        {
+            return Results.Ok(ApiResponse<LoginResponse>.Ok(new LoginResponse
+            {
+                RequiresTwoFactor = true,
+                UserId = user.Id
+            }));
+        }
 
-        var accessToken = jwtTokenGenerator.Generate(user, roles);
+        var roles = await permissionService.GetRolesAsync(user.Id, ct);
 
         var refreshToken = refreshTokenGenerator.Generate();
         var refreshTokenHash = refreshTokenGenerator.Hash(refreshToken);
@@ -130,7 +137,7 @@ public sealed class LoginEndpoint : IEndpointDefinition
             userAgent: httpContext.Request.Headers.UserAgent.ToString(),
             ipAddress: httpContext.Connection.RemoteIpAddress?.ToString());
 
-        accessToken = jwtTokenGenerator.Generate(user, roles, session.Id);
+        var accessToken = jwtTokenGenerator.Generate(user, roles, session.Id);
 
         var oldValues = new
         {

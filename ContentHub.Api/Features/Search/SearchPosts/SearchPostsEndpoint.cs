@@ -4,6 +4,7 @@ using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
+using ContentHub.Infrastructure.Search.OpenSearch;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
@@ -25,12 +26,18 @@ public sealed class SearchPostsEndpoint : IEndpointDefinition
         [FromBody] SearchPostsQuery query,
         IValidator<SearchPostsQuery> validator,
         ContentHubDbContext db,
+        OpenSearchIndex openSearchIndex,
         CancellationToken ct)
     {
         var validationResult = await validator.ValidateAsync(query, ct);
         if (!validationResult.IsValid)
         {
             return ResultsFactory.ValidationProblem(validationResult.ToDictionary());
+        }
+
+        if (openSearchIndex.IsOpenSearchEnabled())
+        {
+            return await SearchWithOpenSearchAsync(query, openSearchIndex, ct);
         }
 
         IQueryable<Post> dbQuery = db.Posts.AsNoTracking();
@@ -140,5 +147,65 @@ public sealed class SearchPostsEndpoint : IEndpointDefinition
     {
         return string.IsNullOrWhiteSpace(sortField) ||
                sortField is "relevance" or "publishedat";
+    }
+
+    private static async Task<IResult> SearchWithOpenSearchAsync(
+        SearchPostsQuery query,
+        OpenSearchIndex openSearchIndex,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await openSearchIndex.SearchPostsAsync(
+                new OpenSearchPostSearchRequest
+                {
+                    Query = query.Q,
+                    CategoryId = query.CategoryId,
+                    AuthorId = query.AuthorId,
+                    Status = query.Status.HasValue
+                        ? Enum.Parse<PostStatus>(query.Status.Value.ToString())
+                        : null,
+                    PublishedFrom = query.PublishedFrom,
+                    PublishedTo = query.PublishedTo,
+                    IsFeatured = query.IsFeatured,
+                    SortBy = query.SortBy,
+                    SortDirection = query.SortDirection,
+                    Page = query.Page,
+                    PageSize = query.PageSize,
+                    IncludeUnpublished = query.IncludeUnpublished
+                },
+                ct);
+
+            var response = new SearchPostsResponse
+            {
+                Items = result.Items
+                    .Select(hit => new PostSummaryDto
+                    {
+                        Id = hit.Document.Id,
+                        Title = hit.Document.Title,
+                        Slug = hit.Document.Slug,
+                        Summary = hit.Document.Summary,
+                        IsFeatured = hit.Document.IsFeatured,
+                        PublishedAtUtc = hit.Document.PublishedAtUtc,
+                        CoverAssetId = hit.Document.CoverAssetId,
+                        Highlights = hit.Highlights
+                    })
+                    .ToList(),
+                PageNumber = query.Page,
+                PageSize = query.PageSize,
+                TotalCount = result.TotalCount,
+                TotalPages = (int)Math.Ceiling(result.TotalCount / (double)query.PageSize)
+            };
+
+            return Results.Ok(ApiResponse<SearchPostsResponse>.Ok(response));
+        }
+        catch (Exception ex)
+        {
+            return Results.Json(
+                ApiResponse<object>.Fail(ApiError.Create(
+                    "search.opensearch_unavailable",
+                    $"OpenSearch search failed: {ex.Message}")),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
     }
 }

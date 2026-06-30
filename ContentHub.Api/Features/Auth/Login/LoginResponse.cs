@@ -2,13 +2,17 @@ namespace ContentHub.Api.Features.Auth.Login;
 
 public sealed class LoginResponse
 {
-    public required string AccessToken { get; set; }
+    public string? AccessToken { get; set; }
 
-    public required string RefreshToken { get; set; } 
+    public string? RefreshToken { get; set; } 
 
-    public DateTime ExpiresAtUtc { get; set; }
+    public DateTime? ExpiresAtUtc { get; set; }
 
-    public required AuthUserResponse User { get; set; } 
+    public AuthUserResponse? User { get; set; } 
+    
+    public bool RequiresTwoFactor { get; set; }
+
+    public Guid? UserId { get; set; }
 }
 
 public sealed class AuthUserResponse

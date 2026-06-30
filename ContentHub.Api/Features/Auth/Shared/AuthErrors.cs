@@ -58,4 +58,14 @@ public static class AuthErrors
         ApiError.Create(
             code: "auth.session_not_found",
             message: "Session was not found.");
+
+    public static ApiError ExternalLoginFailed =>
+        ApiError.Create(
+            code: "auth.external_login_failed",
+            message: "External login failed.");
+
+    public static ApiError ExternalEmailMissing =>
+        ApiError.Create(
+            code: "auth.external_email_missing",
+            message: "The external provider did not return a verified email address.");
 }

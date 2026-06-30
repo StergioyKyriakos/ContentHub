@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using FluentAssertions;
 using ContentHub.IntegrationTests.Infrastructure;
 using Xunit.Abstractions;
@@ -43,6 +44,40 @@ public sealed class SearchFlowTests : IntegrationTestBase
         await LogResponseAsync(response, "GET /api/search/assets?q=test response:");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Authenticated_SearchDocuments_Should_Work()
+    {
+        var token = await Auth.LoginAsync(TestConstants.AdminEmail);
+        Auth.UseBearerToken(token);
+
+        var response = await GetAsJsonAsync("/api/search/documents", new
+        {
+            q = "document",
+            sortBy = "relevance"
+        });
+
+        await LogResponseAsync(response, "GET /api/search/documents?q=document response:");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Admin_SearchReindex_Should_Work()
+    {
+        var token = await Auth.LoginAsync(TestConstants.AdminEmail);
+        Auth.UseBearerToken(token);
+
+        var response = await Client.PostAsJsonAsync("/api/admin/search/reindex", new
+        {
+            force = true
+        });
+
+        var body = await LogResponseAsync(response, "POST /api/admin/search/reindex response:");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().Contain("PostgreSql");
     }
 
     [Fact]

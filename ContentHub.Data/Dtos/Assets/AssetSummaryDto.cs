@@ -21,4 +21,6 @@ public sealed class AssetSummaryDto
     public AssetVisibility Visibility { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
+
+    public IReadOnlyCollection<string> Highlights { get; set; } = [];
 }

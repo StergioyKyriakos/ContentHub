@@ -15,4 +15,6 @@ public sealed class PostSummaryDto
     public DateTime? PublishedAtUtc { get; set; }
 
     public Guid? CoverAssetId { get; set; }
+
+    public IReadOnlyCollection<string> Highlights { get; set; } = [];
 }

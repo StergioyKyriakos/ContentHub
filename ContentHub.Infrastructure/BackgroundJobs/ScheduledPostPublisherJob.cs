@@ -1,9 +1,8 @@
 using System.Text.Json;
-using ContentHub.Data.Entities.AuditLogs;
-using ContentHub.Data.Entities.Notifications;
+using ContentHub.Data.Entities.Outbox;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
-using ContentHub.Infrastructure.Caching;
+using ContentHub.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -71,7 +70,6 @@ public sealed class ScheduledPostPublisherJob : BackgroundService
             {
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var db = scope.ServiceProvider.GetRequiredService<ContentHubDbContext>();
-                var cacheInvalidationService = scope.ServiceProvider.GetRequiredService<CacheInvalidationService>();
                 var now = DateTime.UtcNow;
                 var batchSize = Math.Max(options.ScheduledPostPublisher.BatchSize, 1);
 
@@ -102,35 +100,51 @@ public sealed class ScheduledPostPublisherJob : BackgroundService
                         continue;
                     }
 
-                    var oldValues = new
+                    var oldValues = new PostPublishedAuditValues
                     {
-                        post.Status,
-                        post.PublishedAtUtc,
-                        post.ScheduledForUtc
+                        Status = post.Status.ToString(),
+                        PublishedAtUtc = post.PublishedAtUtc,
+                        ScheduledForUtc = post.ScheduledForUtc
                     };
 
                     post.Publish();
 
-                    db.AuditLogs.Add(new AuditLog(
-                        actorUserId: null,
-                        action: AuditAction.PostPublished,
-                        entityName: "Post",
-                        entityId: post.Id.ToString(),
-                        oldValuesJson: Serialize(oldValues),
-                        newValuesJson: Serialize(new
-                        {
-                            post.Status,
-                            post.PublishedAtUtc,
-                            post.ScheduledForUtc
-                        }),
-                        ipAddress: null,
-                        userAgent: "ContentHub background job"));
+                    var authorUserIds = post.Authors
+                        .Select(postAuthor => postAuthor.Author.UserId)
+                        .Where(userId => userId.HasValue)
+                        .Select(userId => userId!.Value)
+                        .Distinct()
+                        .ToList();
 
-                    await AddNotificationsAsync(db, post.Id, post.Title, post.CreatedById, ct);
+                    if (authorUserIds.Count == 0)
+                    {
+                        authorUserIds.Add(post.CreatedById);
+                    }
+
+                    var payload = new PostPublishedOutboxPayload
+                    {
+                        PostId = post.Id,
+                        PostTitle = post.Title,
+                        CreatedById = post.CreatedById,
+                        AuthorUserIds = authorUserIds,
+                        ActorUserId = null,
+                        IpAddress = null,
+                        UserAgent = "ContentHub background job",
+                        OldValues = oldValues,
+                        NewValues = new PostPublishedAuditValues
+                        {
+                            Status = post.Status.ToString(),
+                            PublishedAtUtc = post.PublishedAtUtc,
+                            ScheduledForUtc = post.ScheduledForUtc
+                        }
+                    };
+
+                    db.OutboxMessages.Add(new OutboxMessage(
+                        OutboxMessageTypes.PostPublished,
+                        Serialize(payload)));
                 }
 
                 await db.SaveChangesAsync(ct);
-                await cacheInvalidationService.InvalidateFeaturedPostsAsync(ct);
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -139,60 +153,6 @@ public sealed class ScheduledPostPublisherJob : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Scheduled post publisher job failed.");
-        }
-    }
-
-    private static async Task AddNotificationsAsync(
-        ContentHubDbContext db,
-        Guid postId,
-        string postTitle,
-        Guid createdById,
-        CancellationToken ct)
-    {
-        var authorUserIds = await db.PostAuthors
-            .Where(postAuthor => postAuthor.PostId == postId && postAuthor.Author.UserId != null)
-            .Select(postAuthor => postAuthor.Author.UserId!.Value)
-            .Distinct()
-            .ToListAsync(ct);
-
-        if (authorUserIds.Count == 0)
-        {
-            authorUserIds.Add(createdById);
-        }
-
-        foreach (var authorUserId in authorUserIds)
-        {
-            var preferenceEnabled = await db.NotificationPreferences
-                .AnyAsync(preference =>
-                        preference.UserId == authorUserId &&
-                        preference.Type == NotificationType.PostPublished &&
-                        preference.Channel == NotificationChannel.InApp &&
-                        preference.IsEnabled,
-                    ct);
-
-            var hasPreference = await db.NotificationPreferences
-                .AnyAsync(preference =>
-                        preference.UserId == authorUserId &&
-                        preference.Type == NotificationType.PostPublished &&
-                        preference.Channel == NotificationChannel.InApp,
-                    ct);
-
-            if (hasPreference && !preferenceEnabled)
-            {
-                continue;
-            }
-
-            var notification = new Notification(
-                userId: authorUserId,
-                type: NotificationType.PostPublished,
-                title: "Post published",
-                message: $"Your post \"{postTitle}\" has been published.");
-
-            db.Notifications.Add(notification);
-
-            db.NotificationDeliveries.Add(new NotificationDelivery(
-                notificationId: notification.Id,
-                channel: NotificationChannel.InApp));
         }
     }
 

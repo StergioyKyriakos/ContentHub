@@ -1,14 +1,15 @@
-using ContentHub.Api.Common.Auditing;
+using System.Text.Json;
 using ContentHub.Api.Common.EndpointDefinitions;
 using ContentHub.Api.Features.Posts.Shared;
+using ContentHub.Application.Abstractions.Authentication;
 using ContentHub.Application.Common.Security;
 using ContentHub.Data.Dtos.Common;
 using ContentHub.Data.Dtos.Posts;
 using ContentHub.Data.Entities.Common;
-using ContentHub.Data.Entities.Notifications;
+using ContentHub.Data.Entities.Outbox;
 using ContentHub.Data.Enums;
 using ContentHub.Data.Persistence;
-using ContentHub.Infrastructure.Caching;
+using ContentHub.Infrastructure.Outbox;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,11 @@ namespace ContentHub.Api.Features.Posts.PublishPost;
 
 public sealed class PublishPostEndpoint : IEndpointDefinition
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     public void MapEndpoints(IEndpointRouteBuilder app)
     {
         app.MapPost(PostEndpoints.Publish, Handle)
@@ -30,8 +36,8 @@ public sealed class PublishPostEndpoint : IEndpointDefinition
         [FromBody] PublishPostCommand command,
         IValidator<PublishPostCommand> validator,
         ContentHubDbContext db,
-        AuditLogWriter auditLogWriter,
-        CacheInvalidationService cacheInvalidationService,
+        ICurrentUserProvider currentUserProvider,
+        IHttpContextAccessor httpContextAccessor,
         CancellationToken ct)
     {
         var validationResult = await validator.ValidateAsync(command, ct);
@@ -83,14 +89,17 @@ public sealed class PublishPostEndpoint : IEndpointDefinition
             return Results.BadRequest(ApiResponse<DomainError>.Fail(PostErrors.AuthorRequired));
         }
         
-        var oldValues = new
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        var oldValues = new PostPublishedAuditValues
         {
-            post.Status,
-            post.PublishedAtUtc
+            Status = post.Status.ToString(),
+            PublishedAtUtc = post.PublishedAtUtc,
+            ScheduledForUtc = post.ScheduledForUtc
         };
 
         post.Publish();
-        
+
         var authorUserIds = post.Authors
             .Select(postAuthor => postAuthor.Author.UserId)
             .Where(userId => userId.HasValue)
@@ -103,54 +112,31 @@ public sealed class PublishPostEndpoint : IEndpointDefinition
             authorUserIds.Add(post.CreatedById);
         }
 
-        foreach (var authorUserId in authorUserIds)
+        var httpContext = httpContextAccessor.HttpContext;
+        var payload = new PostPublishedOutboxPayload
         {
-            var preferenceEnabled = await db.NotificationPreferences
-                .AnyAsync(preference =>
-                        preference.UserId == authorUserId &&
-                        preference.Type == NotificationType.PostPublished &&
-                        preference.Channel == NotificationChannel.InApp &&
-                        preference.IsEnabled,
-                    ct);
-
-            var hasPreference = await db.NotificationPreferences
-                .AnyAsync(preference =>
-                        preference.UserId == authorUserId &&
-                        preference.Type == NotificationType.PostPublished &&
-                        preference.Channel == NotificationChannel.InApp,
-                    ct);
-
-            if (hasPreference && !preferenceEnabled)
+            PostId = post.Id,
+            PostTitle = post.Title,
+            CreatedById = post.CreatedById,
+            AuthorUserIds = authorUserIds,
+            ActorUserId = currentUserProvider.UserId,
+            IpAddress = httpContext?.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = httpContext?.Request.Headers.UserAgent.ToString(),
+            OldValues = oldValues,
+            NewValues = new PostPublishedAuditValues
             {
-                continue;
+                Status = post.Status.ToString(),
+                PublishedAtUtc = post.PublishedAtUtc,
+                ScheduledForUtc = post.ScheduledForUtc
             }
+        };
 
-            var notification = new Notification(
-                userId: authorUserId,
-                type: NotificationType.PostPublished,
-                title: "Post published",
-                message: $"Your post \"{post.Title}\" has been published.");
-
-            db.Notifications.Add(notification);
-
-            db.NotificationDeliveries.Add(new NotificationDelivery(
-                notificationId: notification.Id,
-                channel: NotificationChannel.InApp));
-        }
-        
-        auditLogWriter.Add(
-            action: AuditAction.PostPublished,
-            entityName: "Post",
-            entityId: post.Id.ToString(),
-            oldValues: oldValues,
-            newValues: new
-            {
-                post.Status,
-                post.PublishedAtUtc
-            });
+        db.OutboxMessages.Add(new OutboxMessage(
+            OutboxMessageTypes.PostPublished,
+            JsonSerializer.Serialize(payload, JsonOptions)));
         
         await db.SaveChangesAsync(ct);
-        await cacheInvalidationService.InvalidateFeaturedPostsAsync(ct);
+        await transaction.CommitAsync(ct);
 
         var response = new PublishPostResponse
         {

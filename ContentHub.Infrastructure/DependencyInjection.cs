@@ -4,7 +4,9 @@ using ContentHub.Application.Abstractions.RateLimiting;
 using ContentHub.Infrastructure.Authentication;
 using ContentHub.Infrastructure.BackgroundJobs;
 using ContentHub.Infrastructure.Caching;
+using ContentHub.Infrastructure.Outbox;
 using ContentHub.Infrastructure.RateLimiting;
+using ContentHub.Infrastructure.Search.OpenSearch;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ContentHub.Application.Abstractions.Storage;
@@ -33,6 +35,10 @@ public static class DependencyInjection
             configuration.GetSection(RateLimitOptions.SectionName));
         services.Configure<BackgroundJobOptions>(
             configuration.GetSection(BackgroundJobOptions.SectionName));
+        services.Configure<OutboxOptions>(
+            configuration.GetSection(OutboxOptions.SectionName));
+        services.Configure<OpenSearchOptions>(
+            configuration.GetSection(OpenSearchOptions.SectionName));
         services.Configure<StorageOptions>(
             configuration.GetSection(StorageOptions.SectionName));
         services.Configure<AzureBlobStorageOptions>(
@@ -47,10 +53,13 @@ public static class DependencyInjection
         services.AddSingleton<IRateLimitService, RedisRateLimitService>();
         services.AddSingleton<CacheInvalidationService>();
         services.AddSingleton<RateLimitKeyBuilder>();
+        services.AddScoped<OpenSearchIndex>();
 
         services.AddHostedService<ScheduledPostPublisherJob>();
         services.AddHostedService<NotificationDeliveryJob>();
         services.AddHostedService<ExpiredTokenCleanupJob>();
+        services.AddSingleton<OutboxMessageProcessor>();
+        services.AddHostedService(sp => sp.GetRequiredService<OutboxMessageProcessor>());
         services.AddScoped<ExpiredTokenCleanupService>();
         services.AddSingleton<BackgroundJobLockService>();
 
@@ -77,6 +86,7 @@ public static class DependencyInjection
         services.AddScoped<IFileStorageFactory, FileStorageFactory>();
         services.AddScoped<IFileStorage>(sp =>
             sp.GetRequiredService<IFileStorageFactory>().GetCurrent());
+        services.AddScoped<ITwoFactorService, TotpTwoFactorService>();
 
         return services;
     }

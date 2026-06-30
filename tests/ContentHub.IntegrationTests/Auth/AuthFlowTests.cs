@@ -503,6 +503,26 @@ public sealed class AuthFlowTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task OAuthChallenge_With_UnsupportedProvider_Should_Fail()
+    {
+        var response = await Client.GetAsync("/api/auth/oauth/twitter/challenge");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        await LogResponseAsync(response, "GET /api/auth/oauth/twitter/challenge response:");
+    }
+
+    [Fact]
+    public async Task OAuthChallenge_With_UnconfiguredProvider_Should_Fail()
+    {
+        var response = await Client.GetAsync("/api/auth/oauth/google/challenge");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        await LogResponseAsync(response, "GET /api/auth/oauth/google/challenge response:");
+    }
+
+    [Fact]
     public async Task Viewer_Should_Be_Forbidden_From_Admin_AuditLogs()
     {
         var token = await Auth.LoginAsync(TestConstants.AuthorEmail);

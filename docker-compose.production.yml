@@ -13,6 +13,8 @@ services:
         condition: service_healthy
       contenthub-redis:
         condition: service_healthy
+      contenthub-opensearch:
+        condition: service_healthy
       contenthub-mailpit:
         condition: service_started
     environment:
@@ -28,7 +30,7 @@ services:
       Jwt__Secret: ${CONTENTHUB_JWT_SECRET:?Set CONTENTHUB_JWT_SECRET}
       Jwt__ExpirationMinutes: ${CONTENTHUB_JWT_EXPIRATION_MINUTES:-60}
       Jwt__RefreshTokenExpirationDays: ${CONTENTHUB_REFRESH_TOKEN_EXPIRATION_DAYS:-30}
-      AuthLinks__PublicBaseUrl: ${CONTENTHUB_PUBLIC_BASE_URL:-http://localhost:8080}
+      AuthLinks__PublicBaseUrl: ${CONTENTHUB_PUBLIC_BASE_URL:-http://localhost}
       Email__Smtp__Enabled: ${CONTENTHUB_SMTP_ENABLED:-true}
       Email__Smtp__Host: ${CONTENTHUB_SMTP_HOST:-contenthub-mailpit}
       Email__Smtp__Port: ${CONTENTHUB_SMTP_PORT:-1025}
@@ -41,10 +43,14 @@ services:
       Redis__ConnectionString: contenthub-redis:6379
       Redis__FeaturedPostsCacheMinutes: ${CONTENTHUB_FEATURED_POSTS_CACHE_MINUTES:-5}
       RateLimiting__FailClosedWhenUnavailable: ${CONTENTHUB_RATE_LIMITING_FAIL_CLOSED:-true}
+      Search__Provider: ${CONTENTHUB_SEARCH_PROVIDER:-OpenSearch}
+      Search__Endpoint: http://contenthub-opensearch:9200
+      Search__IndexPrefix: ${CONTENTHUB_SEARCH_INDEX_PREFIX:-contenthub}
+      Search__RequestTimeoutSeconds: ${CONTENTHUB_SEARCH_REQUEST_TIMEOUT_SECONDS:-30}
       Storage__Provider: ${CONTENTHUB_STORAGE_PROVIDER:-Local}
       Storage__RootPath: /app/storage/assets
       Storage__LocalRootPath: /app/storage/assets
-      Storage__PublicBaseUrl: ${CONTENTHUB_STORAGE_PUBLIC_BASE_URL:-/assets}
+      Storage__PublicBaseUrl: ${CONTENTHUB_STORAGE_PUBLIC_BASE_URL:-/storage}
       Storage__AzureBlob__ConnectionString: ${CONTENTHUB_AZURE_BLOB_CONNECTION_STRING:-}
       Storage__AzureBlob__ContainerName: ${CONTENTHUB_AZURE_BLOB_CONTAINER_NAME:-}
       Storage__AzureBlob__PublicBaseUrl: ${CONTENTHUB_AZURE_BLOB_PUBLIC_BASE_URL:-}
@@ -53,8 +59,8 @@ services:
       Storage__S3__PublicBaseUrl: ${CONTENTHUB_S3_PUBLIC_BASE_URL:-}
       BackgroundJobs__Enabled: ${CONTENTHUB_BACKGROUND_JOBS_ENABLED:-true}
       BackgroundJobs__RequireDistributedLock: ${CONTENTHUB_BACKGROUND_JOBS_REQUIRE_DISTRIBUTED_LOCK:-true}
-    ports:
-      - "${CONTENTHUB_API_HTTP_PORT:-8080}:8080"
+    expose:
+      - "8080"
     volumes:
       - contenthub_api_storage:/app/storage/assets
 
@@ -94,6 +100,32 @@ services:
       retries: 10
       start_period: 5s
 
+  contenthub-opensearch:
+    image: opensearchproject/opensearch:2.14.0
+    container_name: contenthub-opensearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      DISABLE_SECURITY_PLUGIN: "true"
+    ports:
+      - "${CONTENTHUB_OPENSEARCH_PORT:-9200}:9200"
+      - "${CONTENTHUB_OPENSEARCH_PERFORMANCE_PORT:-9600}:9600"
+    volumes:
+      - ./docker/opensearch/opensearch.yml:/usr/share/opensearch/config/opensearch.yml:ro
+      - contenthub_opensearch_data:/usr/share/opensearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
   contenthub-mailpit:
     image: axllent/mailpit:v1.21
     container_name: contenthub-mailpit
@@ -105,9 +137,24 @@ services:
       - contenthub_mailpit_data:/data
     environment:
       MP_DATABASE: /data/mailpit.db
+  
+  contenthub-nginx:
+    image: nginx:1.27-alpine
+    container_name: contenthub-nginx
+    restart: unless-stopped
+    depends_on:
+      contenthub-api:
+        condition: service_started
+    ports:
+      - "${CONTENTHUB_NGINX_HTTP_PORT:-80}:80"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d/contenthub.conf:/etc/nginx/conf.d/contenthub.conf:ro
+      - contenthub_api_storage:/usr/share/nginx/html/storage:ro
 
 volumes:
   contenthub_api_storage:
   contenthub_postgres_data:
   contenthub_redis_data:
+  contenthub_opensearch_data:
   contenthub_mailpit_data:

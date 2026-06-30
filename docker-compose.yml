@@ -29,6 +29,27 @@
       - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
       - contenthub_redis_data:/data
 
+  contenthub-opensearch:
+    image: opensearchproject/opensearch:2.14.0
+    container_name: contenthub-opensearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      DISABLE_SECURITY_PLUGIN: "true"
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    volumes:
+      - ./docker/opensearch/opensearch.yml:/usr/share/opensearch/config/opensearch.yml:ro
+      - contenthub_opensearch_data:/usr/share/opensearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
 volumes:
   contenthub_postgres_data:
   contenthub_redis_data:
+  contenthub_opensearch_data:

@@ -1,6 +1,6 @@
 # ContentHub
 
-ContentHub is a .NET 10 content management API. The current backend includes content management, authentication, authorization, audit logs, search, notifications, Redis infrastructure, background jobs, cloud-ready storage, and production-style Docker Compose support.
+ContentHub is a .NET 10 content management API. The current backend includes content management, authentication, authorization, 2FA, OAuth login, audit logs, notifications, Redis infrastructure, background jobs, cloud-ready storage, PostgreSQL and OpenSearch search, outbox processing, and production-style Docker Compose with Nginx.
 
 ## Version 1.0 
 
@@ -93,7 +93,7 @@ Version 2.5 upgrades search from basic text matching to PostgreSQL full-text sea
 
 ## Version 2.6 Production Docker Compose
 
-Version 2.6 adds a production-style Docker Compose stack without adding Nginx yet.
+Version 2.6 introduced the first production-style Docker Compose stack before the later Nginx reverse proxy addition.
 
 - Added `docker-compose.production.yml`
 - Added API, PostgreSQL, Redis, and Mailpit services
@@ -105,6 +105,72 @@ Version 2.6 adds a production-style Docker Compose stack without adding Nginx ye
 - Added fail-closed login throttling support for production Redis outages
 - Updated the API Dockerfile so Docker builds restore all project references reliably
 
+## Version 3.1 Outbox Pattern
+
+Version 3.1 adds an outbox foundation for reliable follow-up work after important domain changes.
+
+- Added `outbox_messages` persistence
+- Added outbox message options under `Outbox`
+- Added outbox processor hosted service
+- Added retry tracking, next-attempt scheduling, and processed message tracking
+- Publishing a post now writes an outbox message in the same database save flow
+- Outbox processing handles post-published follow-up work
+- Added integration coverage for outbox creation, processing, and retry behavior
+
+## Version 3.2 OpenSearch
+
+Version 3.2 adds optional OpenSearch support on top of the PostgreSQL full-text search baseline.
+
+- Added OpenSearch Docker configuration
+- Added OpenSearch service to local and production Docker Compose
+- Added OpenSearch options under `Search`
+- Added OpenSearch index infrastructure for posts and documents
+- Added provider switching through `Search:Provider`
+- Added `POST /api/admin/search/reindex`
+- Added `GET /api/search/documents`
+- Post and document search use OpenSearch when enabled
+- PostgreSQL full-text search remains the fallback provider
+- Search responses can include highlights when OpenSearch is used
+
+## Version 3.3 Nginx
+
+Version 3.3 adds Nginx for production simulation.
+
+- Added `docker/nginx/nginx.conf`
+- Added `docker/nginx/conf.d/contenthub.conf`
+- Added `contenthub-nginx` to production Docker Compose
+- Nginx proxies requests to `contenthub-api`
+- Nginx serves `/storage/*` files from the shared storage volume
+- Upload size limit is enforced at the proxy
+- Basic production security headers are configured
+- Production traffic flow is `Client -> Nginx -> ContentHub.Api`
+
+## Version 3.4 Two-Factor Authentication
+
+Version 3.4 adds TOTP-based 2FA for local accounts.
+
+- Added `POST /api/auth/2fa/enable`
+- Added `POST /api/auth/2fa/confirm`
+- Added `POST /api/auth/2fa/disable`
+- Added `POST /api/auth/2fa/login`
+- Added user fields for 2FA status and secret
+- Login now returns `requiresTwoFactor` without issuing tokens when 2FA is enabled
+- Tokens and sessions are created only after a valid 2FA code is submitted
+- Added TOTP generation and verification infrastructure
+
+## Version 3.5 OAuth Login
+
+Version 3.5 adds external login support for Google and GitHub.
+
+- Added `GET /api/auth/oauth/{provider}/challenge`
+- Added `GET /api/auth/oauth/{provider}/callback`
+- Added Google and GitHub OAuth provider wiring
+- Added external login persistence with `user_external_logins`
+- External accounts are linked to local users
+- OAuth login creates normal ContentHub refresh tokens, sessions, access tokens, and audit logs
+- OAuth providers are only registered when client id and secret configuration exists
+- Added integration coverage for unsupported and unconfigured OAuth providers
+
 ## Tech Stack
 
 - .NET 10
@@ -112,11 +178,16 @@ Version 2.6 adds a production-style Docker Compose stack without adding Nginx ye
 - Entity Framework Core 10
 - PostgreSQL 16
 - Redis 7
+- OpenSearch 2
+- Nginx
+- Mailpit
 - Npgsql
 - StackExchange.Redis
 - Azure.Storage.Blobs
 - AWSSDK.S3
 - JWT Bearer authentication
+- OAuth authentication
+- TOTP two-factor authentication
 - FluentValidation
 - xUnit
 - FluentAssertions
@@ -132,7 +203,8 @@ ContentHub.Application/          Application abstractions and shared application
 ContentHub.Contracts/            Shared contracts project
 ContentHub.Data/                 EF Core entities, DbContext, migrations, DTOs, seeders
 ContentHub.Domain/               Domain-level abstractions
-ContentHub.Infrastructure/       Authentication, storage, caching, rate limiting, and infrastructure services
+ContentHub.Infrastructure/       Authentication, storage, caching, rate limiting, search, outbox, and background services
+docker/                          Redis, OpenSearch, and Nginx configuration
 tests/ContentHub.UnitTests/      Unit tests
 tests/ContentHub.IntegrationTests/ Integration/API tests with Testcontainers PostgreSQL
 tests/ContentHub.ArchitectureTests/ Architecture and dependency rule tests
@@ -141,7 +213,7 @@ tests/ContentHub.ArchitectureTests/ Architecture and dependency rule tests
 ## Prerequisites
 
 - .NET 10 SDK
-- Docker Desktop, required for PostgreSQL, Redis, and integration tests
+- Docker Desktop, required for PostgreSQL, Redis, OpenSearch, and integration tests
 - Redis is started by Docker Compose for caching, login throttling, and distributed background job locks
 
 ## Getting Started
@@ -153,7 +225,7 @@ dotnet tool restore
 dotnet restore
 ```
 
-Start PostgreSQL and Redis:
+Start PostgreSQL, Redis, and OpenSearch:
 
 ```powershell
 docker compose up -d
@@ -174,10 +246,11 @@ $env:CONTENTHUB_SEED_ADMIN_PASSWORD = "change-this-admin-password"
 
 Production-style service URLs:
 
-- API: `http://localhost:8080`
+- Nginx reverse proxy: `http://localhost`
 - Mailpit UI: `http://localhost:8025`
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
+- OpenSearch: `http://localhost:9200`
 
 Run the API:
 
@@ -212,6 +285,15 @@ Default development Redis connection:
 localhost:6379
 ```
 
+Default development search provider:
+
+```text
+Search:Provider = PostgreSql
+Search:Endpoint = http://localhost:9200
+```
+
+Set `Search:Provider` to `OpenSearch` to use OpenSearch-backed post and document search.
+
 Default development storage provider:
 
 ```text
@@ -232,6 +314,22 @@ Email:Smtp:Port = 1025
 ```
 
 The production compose stack points SMTP to Mailpit by default.
+
+OAuth providers can be enabled with:
+
+```text
+OAuth:Google:ClientId
+OAuth:Google:ClientSecret
+OAuth:GitHub:ClientId
+OAuth:GitHub:ClientSecret
+```
+
+External provider callback URLs should point to:
+
+```text
+/api/auth/oauth/google/signin
+/api/auth/oauth/github/signin
+```
 
 Automatic migrations and seed data can be controlled with:
 
@@ -276,13 +374,13 @@ dotnet test
 
 Integration tests require Docker because they use Testcontainers PostgreSQL.
 
-Current v2.6 local verification:
+Current v3 local verification:
 
 ```text
 dotnet build --no-restore
 Unit tests: 46/46 passed
 Architecture tests: 22/22 passed
-Integration tests: 40/40 passed
+Integration tests: 46/46 passed
 ```
 
 Production compose verification:
@@ -293,9 +391,16 @@ docker compose -f docker-compose.production.yml config --quiet
 
 The production compose verification requires the required production environment variables, such as `CONTENTHUB_POSTGRES_PASSWORD` and `CONTENTHUB_JWT_SECRET`, to be set.
 
+Run the production-style stack:
+
+```powershell
+docker compose -f docker-compose.production.yml up -d --build
+```
+
 ## API Areas
 
 - `/api/auth/*`
+- `/api/auth/oauth/*`
 - `/api/categories`
 - `/api/authors`
 - `/api/posts`
@@ -303,17 +408,23 @@ The production compose verification requires the required production environment
 - `/api/public/featured-posts`
 - `/api/assets`
 - `/api/search`
+- `/api/search/documents`
 - `/api/notifications`
 - `/api/admin/audit-logs`
+- `/api/admin/search/reindex`
 - `/health`, `/health/live`, `/health/ready`
 
 ## Notes
 
 - Authorization is currently role-policy based. Permission constants exist, but full permission-based policy enforcement is not yet part of the current baseline.
 - Asset storage supports local filesystem, Azure Blob, and S3 providers. The database stores provider and relative storage path, while URLs are resolved in API responses.
-- Search uses PostgreSQL full-text search with stored vectors, GIN indexes, and relevance ranking. A dedicated search engine is still not part of the current baseline.
+- Search uses PostgreSQL full-text search by default and can switch to OpenSearch for post and document search.
 - Notifications are basic in-app notifications with hosted delivery processing. Auth email delivery supports SMTP and can be tested through Mailpit in the production compose stack.
 - Background jobs publish scheduled posts, mark notification deliveries, and clean up old inactive auth tokens and sessions. They use Redis-backed distributed locks when `BackgroundJobs:RequireDistributedLock` is enabled.
+- Outbox processing is used for reliable post-published follow-up work.
+- 2FA uses TOTP codes from authenticator apps. Recovery codes are not currently implemented.
+- OAuth login currently supports Google and GitHub when provider credentials are configured.
+- Nginx is included in the production compose stack as a reverse proxy and static storage file server.
 - GET endpoints use request bodies when a query object exists. This is a deliberate project convention, but client/proxy compatibility should be checked before public API exposure.
 - EF Core currently logs warnings for required relationships where the required entity has a global query filter. Tests pass, but this is worth revisiting as the data model evolves.
 - FluentAssertions v8 prints a license notice during test runs.

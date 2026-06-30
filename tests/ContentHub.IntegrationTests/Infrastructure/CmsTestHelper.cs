@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
 using Bogus;
+using ContentHub.Infrastructure.Outbox;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
 
 namespace ContentHub.IntegrationTests.Infrastructure;
@@ -8,14 +10,17 @@ public sealed class CmsTestHelper
 {
     private readonly HttpClient _client;
     private readonly ITestOutputHelper _output;
+    private readonly IServiceProvider _services;
     private readonly Faker _faker = new();
 
     public CmsTestHelper(
         HttpClient client,
-        ITestOutputHelper output)
+        ITestOutputHelper output,
+        IServiceProvider services)
     {
         _client = client;
         _output = output;
+        _services = services;
     }
 
     public async Task<Guid> CreateCategoryAsync()
@@ -108,8 +113,17 @@ public sealed class CmsTestHelper
         publishResponse.EnsureSuccessStatusCode();
 
         await LogResponseAsync(publishResponse, $"POST /api/posts/{post.Id}/publish response:");
+        await ProcessOutboxAsync();
 
         return post;
+    }
+
+    private async Task ProcessOutboxAsync()
+    {
+        await using var scope = _services.CreateAsyncScope();
+        var processor = scope.ServiceProvider.GetRequiredService<OutboxMessageProcessor>();
+
+        await processor.ProcessPendingAsync();
     }
 
     private async Task<string> LogResponseAsync(

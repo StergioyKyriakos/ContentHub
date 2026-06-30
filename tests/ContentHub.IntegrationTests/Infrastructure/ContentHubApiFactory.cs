@@ -43,6 +43,7 @@ public sealed class ContentHubApiFactory : WebApplicationFactory<Program>, IAsyn
 
         Environment.SetEnvironmentVariable("Redis__Enabled", _options.RedisEnabled ? "true" : "false");
         Environment.SetEnvironmentVariable("BackgroundJobs__Enabled", _options.BackgroundJobsEnabled ? "true" : "false");
+        Environment.SetEnvironmentVariable("Outbox__Enabled", _options.OutboxEnabled ? "true" : "false");
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -80,7 +81,12 @@ public sealed class ContentHubApiFactory : WebApplicationFactory<Program>, IAsyn
                 ["BackgroundJobs:NotificationDelivery:Enabled"] = _options.BackgroundJobsEnabled ? "true" : "false",
                 ["BackgroundJobs:NotificationDelivery:IntervalSeconds"] = _options.NotificationDeliveryIntervalSeconds.ToString(),
                 ["BackgroundJobs:ExpiredTokenCleanup:Enabled"] = _options.BackgroundJobsEnabled ? "true" : "false",
-                ["BackgroundJobs:ExpiredTokenCleanup:IntervalMinutes"] = _options.ExpiredTokenCleanupIntervalMinutes.ToString()
+                ["BackgroundJobs:ExpiredTokenCleanup:IntervalMinutes"] = _options.ExpiredTokenCleanupIntervalMinutes.ToString(),
+                ["Outbox:Enabled"] = _options.OutboxEnabled ? "true" : "false",
+                ["Outbox:IntervalSeconds"] = _options.OutboxIntervalSeconds.ToString(),
+                ["Outbox:BatchSize"] = "50",
+                ["Outbox:RetryDelaySeconds"] = "1",
+                ["Outbox:MaxRetries"] = "3"
             });
         });
 

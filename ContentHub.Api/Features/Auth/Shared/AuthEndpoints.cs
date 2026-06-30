@@ -25,4 +25,16 @@ public static class AuthEndpoints
     public const string SessionById = "/api/auth/sessions/{id:guid}";
 
     public const string CurrentSession = "/api/auth/sessions/current";
+    
+    public const string EnableTwoFactor = "/api/auth/2fa/enable";
+
+    public const string ConfirmTwoFactor = "/api/auth/2fa/confirm";
+
+    public const string DisableTwoFactor = "/api/auth/2fa/disable";
+
+    public const string LoginTwoFactor = "/api/auth/2fa/login";
+
+    public const string OAuthChallenge = "/api/auth/oauth/{provider}/challenge";
+
+    public const string OAuthCallback = "/api/auth/oauth/{provider}/callback";
 }

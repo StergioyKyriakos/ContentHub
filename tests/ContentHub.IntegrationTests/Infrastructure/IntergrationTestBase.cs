@@ -29,7 +29,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         Client = Factory.CreateClient();
         Auth = new AuthTestHelper(Client, output);
         Seeder = new TestDataSeeder(Factory);
-        Cms = new CmsTestHelper(Client, output);
+        Cms = new CmsTestHelper(Client, output, Factory.Services);
     }
 
     protected ContentHubApiFactory Factory { get; }
@@ -102,6 +102,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                                                  TRUNCATE TABLE
                                                      audit_entity_changes,
                                                      audit_logs,
+                                                     outbox_messages,
                                                      notification_deliveries,
                                                      notifications,
                                                      notification_preferences,
@@ -118,6 +119,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                                                      password_reset_tokens,
                                                      refresh_tokens,
                                                      user_sessions,
+                                                     user_external_logins,
                                                      user_roles,
                                                      users
                                                  RESTART IDENTITY CASCADE;

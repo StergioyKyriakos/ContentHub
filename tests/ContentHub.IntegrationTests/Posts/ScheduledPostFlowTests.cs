@@ -18,8 +18,10 @@ public sealed class ScheduledPostFlowTests : IntegrationTestBase
             new ContentHubApiFactoryOptions
             {
                 BackgroundJobsEnabled = true,
+                OutboxEnabled = true,
                 ScheduledPostPublisherIntervalSeconds = 1,
-                NotificationDeliveryIntervalSeconds = 1
+                NotificationDeliveryIntervalSeconds = 1,
+                OutboxIntervalSeconds = 1
             })
     {
     }
